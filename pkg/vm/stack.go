@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
@@ -264,7 +265,7 @@ func (s *Stack) Iter(f func(Element)) {
 //		// do something with the element.
 //	})
 func (s *Stack) IterBack(f func(Element)) {
-	for i := 0; i < len(s.elems); i++ {
+	for i := range s.elems {
 		f(s.elems[i])
 	}
 }
@@ -293,9 +294,7 @@ func (s *Stack) ReverseTop(n int) error {
 		return nil
 	}
 
-	for i, j := l-n, l-1; i <= j; i, j = i+1, j-1 {
-		s.elems[i], s.elems[j] = s.elems[j], s.elems[i]
-	}
+	slices.Reverse(s.elems[l-n : l])
 	return nil
 }
 
@@ -348,7 +347,7 @@ func (s *Stack) PopSigElements() ([][]byte, error) {
 			return nil, fmt.Errorf("wrong number of elements: need %d, have %d", num, s.Len())
 		}
 		elems = make([][]byte, num)
-		for i := 0; i < num; i++ {
+		for i := range num {
 			elems[i] = s.Pop().Bytes()
 		}
 	}

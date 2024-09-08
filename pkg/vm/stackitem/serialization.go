@@ -133,9 +133,7 @@ func (w *SerializationContext) Serialize(item Item, protected bool) ([]byte, err
 	if w.data != nil {
 		w.data = w.data[:0]
 	}
-	for k := range w.seen {
-		delete(w.seen, k)
-	}
+	clear(w.seen)
 	err := w.serialize(item)
 	if err != nil && protected {
 		if w.data == nil {
@@ -337,7 +335,7 @@ func (r *deserContext) decodeBinary() Item {
 			return nil
 		}
 		arr := make([]Item, size)
-		for i := 0; i < size; i++ {
+		for i := range size {
 			arr[i] = r.decodeBinary()
 		}
 
@@ -352,7 +350,7 @@ func (r *deserContext) decodeBinary() Item {
 			return nil
 		}
 		m := NewMap()
-		for i := 0; i < size; i++ {
+		for range size {
 			key := r.decodeBinary()
 			value := r.decodeBinary()
 			if r.Err != nil {

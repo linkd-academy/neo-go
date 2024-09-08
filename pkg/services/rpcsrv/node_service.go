@@ -32,12 +32,14 @@ func (s *Server) getPeers(_ params.Params) (any, *neorpc.Error) {
 	return peers, nil
 }
 
+
 func (s *Server) getRawMempool(reqParams params.Params) (any, *neorpc.Error) {
 	verbose, _ := reqParams.Value(0).GetBoolean()
 	mp := s.chain.GetMemPool()
-	hashList := make([]util.Uint256, 0)
-	for _, item := range mp.GetVerifiedTransactions() {
-		hashList = append(hashList, item.Hash())
+	txes := mp.GetVerifiedTransactions()
+	hashList := make([]util.Uint256, len(txes))
+	for i := range txes {
+		hashList[i] = txes[i].Hash()
 	}
 	if !verbose {
 		return hashList, nil
@@ -48,6 +50,7 @@ func (s *Server) getRawMempool(reqParams params.Params) (any, *neorpc.Error) {
 		Unverified: []util.Uint256{}, // avoid `null` result
 	}, nil
 }
+
 
 func (s *Server) getConnectionCount(_ params.Params) (any, *neorpc.Error) {
 	return s.coreServer.PeerCount(), nil
@@ -97,6 +100,10 @@ func (s *Server) getVersion(_ params.Params) (any, *neorpc.Error) {
 		}
 		hfs[cfgHf] = height
 	}
+	standbyCommittee, err := keys.NewPublicKeysFromStrings(cfg.StandbyCommittee)
+	if err != nil {
+		return nil, neorpc.NewInternalServerError(fmt.Sprintf("cannot fetch standbyCommittee: %s", err))
+	}
 	return &result.Version{
 		TCPPort:   port,
 		Nonce:     s.coreServer.ID(),
@@ -116,6 +123,8 @@ func (s *Server) getVersion(_ params.Params) (any, *neorpc.Error) {
 			ValidatorsCount:             byte(cfg.GetNumOfCNs(s.chain.BlockHeight())),
 			InitialGasDistribution:      cfg.InitialGASSupply,
 			Hardforks:                   hfs,
+			StandbyCommittee:            standbyCommittee,
+			SeedList:                    cfg.SeedList,
 
 			CommitteeHistory:  cfg.CommitteeHistory,
 			P2PSigExtensions:  cfg.P2PSigExtensions,

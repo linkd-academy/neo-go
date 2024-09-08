@@ -3,7 +3,7 @@ package stateroot_test
 import (
 	"crypto/elliptic"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,7 +39,7 @@ import (
 func testSignStateRoot(t *testing.T, r *state.MPTRoot, pubs keys.PublicKeys, accs ...*wallet.Account) []byte {
 	n := smartcontract.GetMajorityHonestNodeCount(len(accs))
 	w := io.NewBufBinWriter()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sig := accs[i].PrivateKey().SignHashable(uint32(netmode.UnitTestNet), r)
 		emit.Bytes(w.BinWriter, sig)
 	}
@@ -63,10 +63,10 @@ func newMajorityMultisigWithGAS(t *testing.T, n int) (util.Uint160, keys.PublicK
 		require.NoError(t, err)
 		accs[i] = acc
 	}
-	sort.Slice(accs, func(i, j int) bool {
-		pi := accs[i].PublicKey()
-		pj := accs[j].PublicKey()
-		return pi.Cmp(pj) == -1
+	slices.SortFunc(accs, func(a, b *wallet.Account) int {
+		pa := a.PublicKey()
+		pb := b.PublicKey()
+		return pa.Cmp(pb)
 	})
 	pubs := make(keys.PublicKeys, n)
 	for i := range pubs {
@@ -323,7 +323,7 @@ func TestStateroot_GetLatestStateHeight(t *testing.T) {
 	basicchain.Init(t, "../../../", e)
 
 	m := bc.GetStateModule()
-	for i := uint32(0); i < bc.BlockHeight(); i++ {
+	for i := range bc.BlockHeight() {
 		r, err := m.GetStateRoot(i)
 		require.NoError(t, err)
 		h, err := bc.GetStateModule().GetLatestStateHeight(r.Root)

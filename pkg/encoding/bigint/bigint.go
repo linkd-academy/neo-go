@@ -4,8 +4,7 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
-
-	"github.com/nspcc-dev/neo-go/pkg/util/slice"
+	"slices"
 )
 
 const (
@@ -16,12 +15,6 @@ const (
 )
 
 var bigOne = big.NewInt(1)
-
-// FromBytesUnsigned converts data in little-endian format to an unsigned integer.
-func FromBytesUnsigned(data []byte) *big.Int {
-	bs := slice.CopyReverse(data)
-	return new(big.Int).SetBytes(bs)
-}
 
 // FromBytes converts data in little-endian format to
 // an integer.
@@ -48,7 +41,7 @@ func FromBytes(data []byte) *big.Int {
 
 	lw := size / wordSizeBytes
 	ws := make([]big.Word, lw+1)
-	for i := 0; i < lw; i++ {
+	for i := range lw {
 		base := i * wordSizeBytes
 		for j := base + 7; j >= base; j-- {
 			ws[i] <<= 8
@@ -148,7 +141,7 @@ func ToPreallocatedBytes(n *big.Int, data []byte) []byte {
 		data = data[:lb]
 	}
 	_ = n.FillBytes(data)
-	slice.Reverse(data)
+	slices.Reverse(data)
 
 	if sign == -1 {
 		for i := range data {

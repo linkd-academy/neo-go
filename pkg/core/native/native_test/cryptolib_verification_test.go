@@ -2,7 +2,7 @@ package native_test
 
 import (
 	"math/big"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/interop/interopnames"
@@ -67,7 +67,7 @@ func TestCryptoLib_KoblitzVerificationScript(t *testing.T) {
 			},
 		}
 		neotest.AddNetworkFee(t, e.Chain, tx)
-		neotest.AddSystemFee(e.Chain, tx, -1)
+		e.AddSystemFee(tx, -1)
 
 		// Add some more network fee to pay for the witness verification. This value may be calculated precisely,
 		// but let's keep some inaccurate value for the test.
@@ -602,9 +602,7 @@ func TestCryptoLib_KoblitzMultisigVerificationScript(t *testing.T) {
 			require.NoError(t, err)
 		}
 		// Sort private keys by their public keys.
-		sort.Slice(pks, func(i, j int) bool {
-			return pks[i].PublicKey().Cmp(pks[j].PublicKey()) < 0
-		})
+		slices.SortFunc(pks, func(a, b *keys.PrivateKey) int { return a.PublicKey().Cmp(b.PublicKey()) })
 
 		// Firstly, we need to build the N3 multisig account address based on the users' public keys.
 		// Pubs must be sorted, exactly like for the standard CheckMultisig.
@@ -631,7 +629,7 @@ func TestCryptoLib_KoblitzMultisigVerificationScript(t *testing.T) {
 			},
 		}
 		neotest.AddNetworkFee(t, e.Chain, tx)
-		neotest.AddSystemFee(e.Chain, tx, -1)
+		e.AddSystemFee(tx, -1)
 
 		// Add some more network fee to pay for the witness verification. This value may be calculated precisely,
 		// but let's keep some inaccurate value for the test.

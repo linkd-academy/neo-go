@@ -186,7 +186,7 @@ func (s *Server) getNextBlockValidators(_ params.Params) (any, *neorpc.Error) {
 	if err != nil {
 		return nil, neorpc.NewInternalServerError(fmt.Sprintf("Can't get enrollments: %s", err.Error()))
 	}
-	var res = make([]result.Validator, 0)
+	var res = make([]result.Validator, 0, len(validators))
 	for _, v := range enrollments {
 		if !validators.Contains(v.Key) {
 			continue
@@ -331,6 +331,7 @@ func getTimestampsAndLimit(ps params.Params, index int) (uint64, uint64, int, in
 
 
 // getCandidates returns the current list of candidates with their active/inactive voting status.
+
 func (s *Server) getCandidates(_ params.Params) (any, *neorpc.Error) {
 	var validators keys.PublicKeys
 
@@ -342,7 +343,7 @@ func (s *Server) getCandidates(_ params.Params) (any, *neorpc.Error) {
 	if err != nil {
 		return nil, neorpc.NewInternalServerError(fmt.Sprintf("Can't get enrollments: %s", err.Error()))
 	}
-	var res = make([]result.Candidate, 0)
+	var res = make([]result.Candidate, 0, len(enrollments))
 	for _, v := range enrollments {
 		res = append(res, result.Candidate{
 			PublicKey: *v.Key,
@@ -352,7 +353,6 @@ func (s *Server) getCandidates(_ params.Params) (any, *neorpc.Error) {
 	}
 	return res, nil
 }
-
 
 func (s *Server) getRawNotaryTransaction(reqParams params.Params) (any, *neorpc.Error) {
 	if !s.chain.P2PSigExtensionsEnabled() {

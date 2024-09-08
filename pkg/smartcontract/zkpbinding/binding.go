@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"text/template"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -22,7 +23,6 @@ import (
 	curve "github.com/consensys/gnark/backend/groth16/bls12-381"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/binding"
-	"github.com/nspcc-dev/neo-go/pkg/util/slice"
 )
 
 // Config represents a configuration for Verifier Go smart contract generator.
@@ -133,11 +133,11 @@ func VerifyProof(a []byte, b []byte, c []byte, publicInput [][]byte) bool {
 		panic("error: inputlen or iclen")
 	}
 	icPoints := make([]crypto.Bls12381Point, iclen)
-	for i := 0; i < iclen; i++ {
+	for i := range iclen {
 		icPoints[i] = crypto.Bls12381Deserialize(ic[i])
 	}
 	acc := icPoints[0]
-	for i := 0; i < inputlen; i++ {
+	for i := range inputlen {
 		scalar := publicInput[i] // 32-bytes LE field element.
 		temp := crypto.Bls12381Mul(icPoints[i+1], scalar, false)
 		acc = crypto.Bls12381Add(acc, temp)
@@ -165,7 +165,7 @@ supportedstandards: []`
 	// and dependency packages version needed for smart contract compilation.
 	verifyGomod = `module verify
 
-go 1.20
+go 1.22
 
 require github.com/nspcc-dev/neo-go/pkg/interop v0.0.0-20231004150345-8849ccde2524
 `
@@ -320,7 +320,7 @@ func GetVerifyProofArgs(proof groth16.Proof, publicWitness witness.Witness) (*Ve
 	for i := range input { // firstly - public witnesses, after that - private ones (but they are missing from publicWitness anyway).
 		start := offset + i*fr.Bytes
 		end := start + fr.Bytes
-		slice.Reverse(publicWitnessBytes[start:end]) // gnark stores witnesses in the BE form, but native CryptoLib accepts LE-encoded fields elements (not a canonical form).
+		slices.Reverse(publicWitnessBytes[start:end]) // gnark stores witnesses in the BE form, but native CryptoLib accepts LE-encoded fields elements (not a canonical form).
 		input[i] = publicWitnessBytes[start:end]
 	}
 	return &VerifyProofArgs{

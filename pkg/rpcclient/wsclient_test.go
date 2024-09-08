@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -356,7 +356,7 @@ func TestWSClientNonBlockingEvents(t *testing.T) {
 	wsc.subscriptionsLock.RUnlock()
 
 	// Check that receiver was closed after overflow.
-	for i := 0; i < chCap; i++ {
+	for range chCap {
 		_, ok := <-bCh
 		require.True(t, ok)
 	}
@@ -836,7 +836,7 @@ func TestWSConcurrentAccess(t *testing.T) {
 	require.NoError(t, err)
 	batchCount := 100
 	completed := &atomic.Int32{}
-	for i := 0; i < batchCount; i++ {
+	for range batchCount {
 		go func() {
 			_, err := wsc.GetBlockCount()
 			require.NoError(t, err)
@@ -866,7 +866,7 @@ func TestWSConcurrentAccess(t *testing.T) {
 	}
 	ids.lock.RUnlock()
 
-	sort.Ints(idsList)
+	slices.Sort(idsList)
 	require.Equal(t, 1, idsList[0])
 	require.Less(t, idsList[len(idsList)-1],
 		batchCount*3+1) // batchCount*requestsPerBatch+1

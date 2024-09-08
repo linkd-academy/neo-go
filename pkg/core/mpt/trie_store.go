@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -21,10 +22,6 @@ type TrieStore struct {
 	trie *Trie
 }
 
-// ErrForbiddenTrieStoreOperation is returned when operation is not supposed to
-// be performed over MPT-based Store.
-var ErrForbiddenTrieStoreOperation = errors.New("operation is not allowed to be performed over TrieStore")
-
 // NewTrieStore returns a new ready to use MPT-backed storage.
 func NewTrieStore(root util.Uint256, mode TrieMode, backed storage.Store) *TrieStore {
 	cache, ok := backed.(*storage.MemCachedStore)
@@ -37,10 +34,11 @@ func NewTrieStore(root util.Uint256, mode TrieMode, backed storage.Store) *TrieS
 	}
 }
 
-// Get implements the Store interface.
+// Get implements the Store interface. It can return [errors.ErrUnsupported]
+// for unsupported operations.
 func (m *TrieStore) Get(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, fmt.Errorf("%w: Get is supported only for contract storage items", ErrForbiddenTrieStoreOperation)
+		return nil, fmt.Errorf("%w: Get is supported only for contract storage items", errors.ErrUnsupported)
 	}
 	switch storage.KeyPrefix(key[0]) {
 	case storage.STStorage, storage.STTempStorage:
@@ -51,22 +49,23 @@ func (m *TrieStore) Get(key []byte) ([]byte, error) {
 		}
 		return res, err
 	default:
-		return nil, fmt.Errorf("%w: Get is supported only for contract storage items", ErrForbiddenTrieStoreOperation)
+		return nil, fmt.Errorf("%w: Get is supported only for contract storage items", errors.ErrUnsupported)
 	}
 }
 
-// PutChangeSet implements the Store interface.
+// PutChangeSet implements the Store interface. It's not supported, so it
+// always returns [errors.ErrUnsupported].
 func (m *TrieStore) PutChangeSet(puts map[string][]byte, stor map[string][]byte) error {
 	// Only Get and Seek should be supported, as TrieStore is read-only and is always
 	// should be wrapped by MemCachedStore to properly support put operations (if any).
-	return fmt.Errorf("%w: PutChangeSet is not supported", ErrForbiddenTrieStoreOperation)
+	return fmt.Errorf("%w: PutChangeSet is not supported", errors.ErrUnsupported)
 }
 
 // Seek implements the Store interface.
 func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
 	prefix := storage.KeyPrefix(rng.Prefix[0])
 	if prefix != storage.STStorage && prefix != storage.STTempStorage { // Prefix is always non-empty.
-		panic(fmt.Errorf("%w: Seek is supported only for contract storage items", ErrForbiddenTrieStoreOperation))
+		panic(fmt.Errorf("%w: Seek is supported only for contract storage items", errors.ErrUnsupported))
 	}
 	prefixP := toNibbles(rng.Prefix[1:])
 	fromP := []byte{}
@@ -100,7 +99,7 @@ func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
 		if leaf, ok := node.(*LeafNode); ok {
 			// (*Billet).traverse includes `from` path into the result if so. It's OK for Seek, so shouldn't be filtered out.
 			kv := storage.KeyValue{
-				Key:   append(bytes.Clone(rng.Prefix), pathToNode...), // Do not cut prefix.
+				Key:   slices.Concat(rng.Prefix, pathToNode), // Do not cut prefix.
 				Value: bytes.Clone(leaf.value),
 			}
 			return !f(kv.Key, kv.Value) // Should return whether to stop.
@@ -113,9 +112,10 @@ func (m *TrieStore) Seek(rng storage.SeekRange, f func(k, v []byte) bool) {
 	}
 }
 
-// SeekGC implements the Store interface.
+// SeekGC implements the Store interface. It's not supported, so it always
+// returns [errors.ErrUnsupported].
 func (m *TrieStore) SeekGC(rng storage.SeekRange, keep func(k, v []byte) bool) error {
-	return fmt.Errorf("%w: SeekGC is not supported", ErrForbiddenTrieStoreOperation)
+	return fmt.Errorf("%w: SeekGC is not supported", errors.ErrUnsupported)
 }
 
 // Close implements the Store interface.

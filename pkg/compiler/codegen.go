@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,7 +11,7 @@ import (
 	"go/types"
 	"math"
 	"math/big"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
@@ -382,7 +383,7 @@ func (c *codegen) isVerifyFunc(decl *ast.FuncDecl) bool {
 }
 
 func (c *codegen) clearSlots(n int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		emit.Opcodes(c.prog.BinWriter, opcode.PUSHNULL)
 		c.emitStoreByIndex(varLocal, i)
 	}
@@ -402,9 +403,7 @@ func (c *codegen) convertInitFuncs(f *ast.File, pkg *types.Package, lastCount in
 
 				f := c.convertFuncDecl(f, n, pkg)
 				lastCount = f.vars.localsCnt
-				if lastCount > maxCount {
-					maxCount = lastCount
-				}
+				maxCount = max(lastCount, maxCount)
 			}
 		case *ast.GenDecl:
 			return false
@@ -437,9 +436,7 @@ func (c *codegen) convertDeployFuncs() int {
 
 					f := c.convertFuncDecl(f, n, pkg)
 					lastCount = f.vars.localsCnt
-					if lastCount > maxCount {
-						maxCount = lastCount
-					}
+					maxCount = max(lastCount, maxCount)
 				}
 			case *ast.GenDecl:
 				return false
@@ -683,7 +680,7 @@ func (c *codegen) Visit(node ast.Node) ast.Visitor {
 			ast.Walk(c, n.Rhs[0])
 			c.emitToken(n.Tok, c.typeOf(n.Rhs[0]))
 		}
-		for i := 0; i < len(n.Lhs); i++ {
+		for i := range n.Lhs {
 			switch t := n.Lhs[i].(type) {
 			case *ast.Ident:
 				if n.Tok == token.DEFINE {
@@ -1102,7 +1099,7 @@ func (c *codegen) Visit(node ast.Node) ast.Visitor {
 				f := c.typeOf(n.Fun).Underlying().(*types.Signature)
 				sz = f.Results().Len()
 			}
-			for i := 0; i < sz; i++ {
+			for range sz {
 				emit.Opcodes(c.prog.BinWriter, opcode.DROP)
 			}
 		}
@@ -1665,7 +1662,7 @@ func (c *codegen) dropStackLabel() {
 
 func (c *codegen) dropItems(n int) {
 	if n < 4 {
-		for i := 0; i < n; i++ {
+		for range n {
 			emit.Opcodes(c.prog.BinWriter, opcode.DROP)
 		}
 		return
@@ -1933,7 +1930,7 @@ func (c *codegen) convertBuiltin(expr *ast.CallExpr) {
 					opcode.INC)      // x y cnt+1
 				emit.Jmp(c.prog.BinWriter, opcode.JMPL, start)
 				c.setLabel(after)
-				for i := 0; i < 4; i++ { // leave x on stack
+				for range 4 { // leave x on stack
 					emit.Opcodes(c.prog.BinWriter, opcode.DROP)
 				}
 			} else {
@@ -2015,7 +2012,7 @@ func (c *codegen) emitConvert(typ stackitem.Type) {
 func (c *codegen) convertByteArray(elems []ast.Expr) {
 	buf := make([]byte, len(elems))
 	varIndices := []int{}
-	for i := 0; i < len(elems); i++ {
+	for i := range elems {
 		t := c.typeAndValueOf(elems[i])
 		if t.Value != nil {
 			val, _ := constant.Int64Val(t.Value)
@@ -2257,7 +2254,7 @@ func (c *codegen) compile(info *buildInfo, pkg *packages.Package) error {
 	for _, p := range info.program {
 		keys = append(keys, p.Types)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i].Path() < keys[j].Path() })
+	slices.SortFunc(keys, func(a, b *types.Package) int { return cmp.Compare(a.Path(), b.Path()) })
 
 	// Generate the code for the program.
 	c.ForEachFile(func(f *ast.File, pkg *types.Package) {
@@ -2511,7 +2508,7 @@ func removeNOPs(b []byte, nopOffsets []int, sequencePoints map[string][]DebugSeq
 	// 2. Convert instructions.
 	copyOffset := 0
 	l := len(nopOffsets)
-	for i := 0; i < l; i++ {
+	for i := range l {
 		start := nopOffsets[i]
 		end := len(b)
 		if i != l-1 {
@@ -2539,9 +2536,7 @@ func removeNOPs(b []byte, nopOffsets []int, sequencePoints map[string][]DebugSeq
 
 func calcOffsetCorrection(ip, target int, offsets []int) int {
 	cnt := 0
-	start := sort.Search(len(offsets), func(i int) bool {
-		return offsets[i] >= ip || offsets[i] >= target
-	})
+	start, _ := slices.BinarySearch(offsets, min(ip, target))
 	for i := start; i < len(offsets) && (offsets[i] < target || offsets[i] <= ip); i++ {
 		ind := offsets[i]
 		if ip <= ind && ind < target || target <= ind && ind < ip {

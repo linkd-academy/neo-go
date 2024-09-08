@@ -51,7 +51,8 @@ linters:
     - decorder
     - durationcheck
     - errorlint
-    - exportloopref
+    - intrange
+    - copyloopvar
     - gofmt
     - misspell
     - predeclared

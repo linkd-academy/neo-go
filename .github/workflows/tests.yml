@@ -135,11 +135,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache: true
 
       - name: Write coverage profile
-        run: go test -timeout 15m -v ./... -coverprofile=./coverage.txt -covermode=atomic -coverpkg=./pkg...,./cli/...
+        run: DISABLE_NEOTEST_COVER=1 go test -timeout 15m -v ./... -coverprofile=./coverage.txt -covermode=atomic -coverpkg=./pkg...,./cli/...
 
       - name: Upload coverage results to Codecov
         uses: codecov/codecov-action@v4
@@ -156,24 +156,18 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04, windows-2022, macos-12, macos-14]
-        go_versions: [ '1.20', '1.21', '1.22' ]
+        go_versions: [ '1.22', '1.23' ]
         exclude:
           # Only latest Go version for Windows and MacOS.
           - os: windows-2022
-            go_versions: '1.20'
-          - os: windows-2022
-            go_versions: '1.21'
+            go_versions: '1.22'
           - os: macos-12
-            go_versions: '1.20'
-          - os: macos-12
-            go_versions: '1.21'
+            go_versions: '1.22'
           - os: macos-14
-            go_versions: '1.20'
-          - os: macos-14
-            go_versions: '1.21'
+            go_versions: '1.22'
           # Exclude latest Go version for Ubuntu as Coverage uses it.
           - os: ubuntu-22.04
-            go_versions: '1.22'
+            go_versions: '1.23'
       fail-fast: false
     steps:
       - uses: actions/checkout@v4

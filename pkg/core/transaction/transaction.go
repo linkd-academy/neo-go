@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/util/bitfield"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
 )
 
@@ -159,7 +160,7 @@ func (t *Transaction) decodeHashableFields(br *io.BinReader, buf []byte) {
 		return
 	}
 	t.Signers = make([]Signer, nsigners)
-	for i := 0; i < int(nsigners); i++ {
+	for i := range t.Signers {
 		t.Signers[i].DecodeBinary(br)
 	}
 	nattrs := br.ReadVarUint()
@@ -168,7 +169,7 @@ func (t *Transaction) decodeHashableFields(br *io.BinReader, buf []byte) {
 		return
 	}
 	t.Attributes = make([]Attribute, nattrs)
-	for i := 0; i < int(nattrs); i++ {
+	for i := range t.Attributes {
 		t.Attributes[i].DecodeBinary(br)
 	}
 	t.Script = br.ReadVarBytes(MaxScriptLength)
@@ -196,7 +197,7 @@ func (t *Transaction) decodeBinaryNoSize(br *io.BinReader, buf []byte) {
 		return
 	}
 	t.Scripts = make([]Witness, nscripts)
-	for i := 0; i < int(nscripts); i++ {
+	for i := range t.Scripts {
 		t.Scripts[i].DecodeBinary(br)
 	}
 
@@ -421,21 +422,21 @@ func (t *Transaction) isValid() error {
 	if len(t.Signers) == 0 {
 		return ErrEmptySigners
 	}
-	for i := 0; i < len(t.Signers); i++ {
+	for i := range t.Signers {
 		for j := i + 1; j < len(t.Signers); j++ {
 			if t.Signers[i].Account.Equals(t.Signers[j].Account) {
 				return ErrNonUniqueSigners
 			}
 		}
 	}
-	attrs := map[AttrType]bool{}
+	var attrBits = bitfield.New(256)
 	for i := range t.Attributes {
 		typ := t.Attributes[i].Type
 		if !typ.allowMultiple() {
-			if attrs[typ] {
+			if attrBits.IsSet(int(typ)) {
 				return fmt.Errorf("%w: multiple '%s' attributes", ErrInvalidAttribute, typ.String())
 			}
-			attrs[typ] = true
+			attrBits.Set(int(typ))
 		}
 	}
 	if len(t.Script) == 0 {

@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"slices"
 	"text/tabwriter"
 	"unicode/utf8"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/nef"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
-	"github.com/nspcc-dev/neo-go/pkg/util/slice"
 	"github.com/nspcc-dev/neo-go/pkg/vm/invocations"
 	"github.com/nspcc-dev/neo-go/pkg/vm/opcode"
 	"github.com/nspcc-dev/neo-go/pkg/vm/stackitem"
@@ -696,7 +696,7 @@ func (v *VM) execute(ctx *Context, op opcode.Opcode, parameter []byte) (err erro
 		if parameter[1] > 0 {
 			sz := int(parameter[1])
 			ctx.arguments.init(sz, &v.refs)
-			for i := 0; i < sz; i++ {
+			for i := range sz {
 				ctx.arguments.Set(i, v.estack.Pop().Item(), &v.refs)
 			}
 		}
@@ -1199,7 +1199,7 @@ func (v *VM) execute(ctx *Context, op opcode.Opcode, parameter []byte) (err erro
 		}
 
 		items := make([]stackitem.MapElement, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			key := v.estack.Pop()
 			validateMapKey(key)
 			val := v.estack.Pop().value
@@ -1215,7 +1215,7 @@ func (v *VM) execute(ctx *Context, op opcode.Opcode, parameter []byte) (err erro
 		}
 
 		items := make([]stackitem.Item, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			items[i] = v.estack.Pop().value
 		}
 
@@ -1352,13 +1352,10 @@ func (v *VM) execute(ctx *Context, op opcode.Opcode, parameter []byte) (err erro
 			if t.(stackitem.Immutable).IsReadOnly() {
 				panic(stackitem.ErrReadOnly)
 			}
-			a := t.Value().([]stackitem.Item)
-			for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
-				a[i], a[j] = a[j], a[i]
-			}
+			slices.Reverse(t.Value().([]stackitem.Item))
 		case *stackitem.Buffer:
 			b := t.Value().([]byte)
-			slice.Reverse(b)
+			slices.Reverse(b)
 		default:
 			panic(fmt.Sprintf("invalid item type %s", t))
 		}
@@ -1810,7 +1807,7 @@ func (v *VM) handleException() {
 				j = -1
 				continue
 			}
-			for i := 0; i < pop; i++ {
+			for range pop {
 				ctx := v.istack[len(v.istack)-1]
 				v.istack = v.istack[:len(v.istack)-1]
 				v.unloadContext(ctx)
@@ -1855,7 +1852,7 @@ func throwUnhandledException(item stackitem.Item) {
 // block in one of its contexts.
 func (v *VM) ContractHasTryBlock() bool {
 	var topctx *Context // Currently executing context.
-	for i := 0; i < len(v.istack); i++ {
+	for i := range v.istack {
 		ictx := v.istack[len(v.istack)-1-i] // It's a stack, going backwards like handleException().
 		if topctx == nil {
 			topctx = ictx
@@ -1863,7 +1860,7 @@ func (v *VM) ContractHasTryBlock() bool {
 		if ictx.sc != topctx.sc {
 			return false // Different contract -> no one cares.
 		}
-		for j := 0; j < ictx.tryStack.Len(); j++ {
+		for j := range ictx.tryStack.Len() {
 			eCtx := ictx.tryStack.Peek(j).Value().(*exceptionHandlingContext)
 			if eCtx.State == eTry {
 				return true
@@ -1874,9 +1871,12 @@ func (v *VM) ContractHasTryBlock() bool {
 }
 
 // CheckMultisigPar checks if the sigs contains sufficient valid signatures.
-func CheckMultisigPar(v *VM, curve elliptic.Curve, h []byte, pkeys [][]byte, sigs [][]byte) bool {
+func CheckMultisigPar(curve elliptic.Curve, h []byte, pkeys [][]byte, sigs [][]byte) bool {
 	if len(sigs) == 1 {
-		return checkMultisig1(v, curve, h, pkeys, sigs[0])
+		return slices.ContainsFunc(pkeys, func(keyb []byte) bool {
+			pkey := bytesToPublicKey(keyb, curve)
+			return pkey.Verify(sigs[0], h)
+		})
 	}
 
 	k1, k2 := 0, len(pkeys)-1
@@ -1909,7 +1909,7 @@ func CheckMultisigPar(v *VM, curve elliptic.Curve, h []byte, pkeys [][]byte, sig
 	const workerCount = 3
 	tasks := make(chan task, 2)
 	results := make(chan verify, len(sigs))
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		go worker(tasks, results)
 	}
 
@@ -1964,17 +1964,6 @@ loop:
 	close(tasks)
 
 	return sigok
-}
-
-func checkMultisig1(v *VM, curve elliptic.Curve, h []byte, pkeys [][]byte, sig []byte) bool {
-	for i := range pkeys {
-		pkey := bytesToPublicKey(pkeys[i], curve)
-		if pkey.Verify(sig, h) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func cloneIfStruct(item stackitem.Item) stackitem.Item {

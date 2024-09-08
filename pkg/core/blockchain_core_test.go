@@ -89,16 +89,16 @@ func TestRemoveOldTransfers(t *testing.T) {
 	acc3 := util.Uint160{3}
 	ttl := state.TokenTransferLog{Raw: []byte{1}} // It's incorrect, but who cares.
 
-	for i := uint32(0); i < 3; i++ {
+	for i := range uint32(3) {
 		bc.dao.PutTokenTransferLog(acc1, older, i, false, &ttl)
 	}
-	for i := uint32(0); i < 3; i++ {
+	for i := range uint32(3) {
 		bc.dao.PutTokenTransferLog(acc2, newer, i, false, &ttl)
 	}
-	for i := uint32(0); i < 2; i++ {
+	for i := range uint32(2) {
 		bc.dao.PutTokenTransferLog(acc3, older, i, true, &ttl)
 	}
-	for i := uint32(0); i < 2; i++ {
+	for i := range uint32(2) {
 		bc.dao.PutTokenTransferLog(acc3, newer, i, true, &ttl)
 	}
 
@@ -106,7 +106,7 @@ func TestRemoveOldTransfers(t *testing.T) {
 	require.NoError(t, err)
 	_ = bc.removeOldTransfers(0)
 
-	for i := uint32(0); i < 2; i++ {
+	for i := range uint32(2) {
 		log, err := bc.dao.GetTokenTransferLog(acc1, older, i, false)
 		require.NoError(t, err)
 		require.Equal(t, 0, len(log.Raw))
@@ -116,7 +116,7 @@ func TestRemoveOldTransfers(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(log.Raw))
 
-	for i := uint32(0); i < 3; i++ {
+	for i := range uint32(3) {
 		log, err = bc.dao.GetTokenTransferLog(acc2, newer, i, false)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(log.Raw))
@@ -130,7 +130,7 @@ func TestRemoveOldTransfers(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(log.Raw))
 
-	for i := uint32(0); i < 2; i++ {
+	for i := range uint32(2) {
 		log, err = bc.dao.GetTokenTransferLog(acc3, newer, i, true)
 		require.NoError(t, err)
 		require.NotEqual(t, 0, len(log.Raw))
@@ -153,7 +153,7 @@ func TestBlockchain_InitWithIncompleteStateJump(t *testing.T) {
 	bcSpout := newTestChainWithCustomCfg(t, spountCfg)
 
 	// Generate some content.
-	for i := 0; i < len(bcSpout.GetConfig().StandbyCommittee); i++ {
+	for range bcSpout.GetConfig().StandbyCommittee {
 		require.NoError(t, bcSpout.AddBlock(bcSpout.newBlock()))
 	}
 
@@ -371,6 +371,7 @@ func TestNewBlockchain_InitHardforks(t *testing.T) {
 			config.HFBasilisk.String():      0,
 			config.HFCockatrice.String():    0,
 			config.HFDomovoi.String():       0,
+			config.HFEchidna.String():       0,
 		}, bc.GetConfig().Hardforks)
 	})
 	t.Run("empty set", func(t *testing.T) {
@@ -401,7 +402,7 @@ func TestNewBlockchain_InitHardforks(t *testing.T) {
 	})
 	t.Run("all present", func(t *testing.T) {
 		bc := newTestChainWithCustomCfg(t, func(c *config.Config) {
-			c.ProtocolConfiguration.Hardforks = map[string]uint32{config.HFAspidochelone.String(): 5, config.HFBasilisk.String(): 10, config.HFCockatrice.String(): 15, config.HFDomovoi.String(): 20}
+			c.ProtocolConfiguration.Hardforks = map[string]uint32{config.HFAspidochelone.String(): 5, config.HFBasilisk.String(): 10, config.HFCockatrice.String(): 15, config.HFDomovoi.String(): 20, config.HFEchidna.String(): 25}
 			require.NoError(t, c.ProtocolConfiguration.Validate())
 		})
 		require.Equal(t, map[string]uint32{
@@ -409,6 +410,7 @@ func TestNewBlockchain_InitHardforks(t *testing.T) {
 			config.HFBasilisk.String():      10,
 			config.HFCockatrice.String():    15,
 			config.HFDomovoi.String():       20,
+			config.HFEchidna.String():       25,
 		}, bc.GetConfig().Hardforks)
 	})
 }

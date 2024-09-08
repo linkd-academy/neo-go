@@ -10,7 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -51,6 +51,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/oracle"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/policy"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient/rolemgmt"
+	"github.com/nspcc-dev/neo-go/pkg/rpcclient/waiter"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/callflag"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
@@ -153,7 +154,7 @@ func TestClientRoleManagement(t *testing.T) {
 	_, err = c.SubmitBlock(*bl)
 	require.NoError(t, err)
 
-	sort.Sort(testKeys)
+	slices.SortFunc(testKeys, (*keys.PublicKey).Cmp)
 	ks, err = rm.GetDesignatedByRole(noderoles.Oracle, height+1)
 	require.NoError(t, err)
 	require.Equal(t, testKeys, ks)
@@ -1454,14 +1455,14 @@ func TestClient_IteratorSessions(t *testing.T) {
 	// storageItemsCount is the amount of storage items stored in Storage contract, it's hard-coded in the contract code.
 	const storageItemsCount = 255
 	expected := make([][]byte, storageItemsCount)
-	for i := 0; i < storageItemsCount; i++ {
+	for i := range storageItemsCount {
 		expected[i] = stackitem.NewBigInteger(big.NewInt(int64(i))).Bytes()
 	}
-	sort.Slice(expected, func(i, j int) bool {
-		if len(expected[i]) != len(expected[j]) {
-			return len(expected[i]) < len(expected[j])
+	slices.SortFunc(expected, func(a, b []byte) int {
+		if len(a) != len(b) {
+			return len(a) - len(b)
 		}
-		return bytes.Compare(expected[i], expected[j]) < 0
+		return bytes.Compare(a, b)
 	})
 
 	prepareSession := func(t *testing.T) (uuid.UUID, uuid.UUID) {
@@ -1478,11 +1479,11 @@ func TestClient_IteratorSessions(t *testing.T) {
 	t.Run("traverse with max constraint", func(t *testing.T) {
 		sID, iID := prepareSession(t)
 		check := func(t *testing.T, start, end int) {
-			max := end - start
-			set, err := c.TraverseIterator(sID, iID, max)
+			maxNum := end - start
+			set, err := c.TraverseIterator(sID, iID, maxNum)
 			require.NoError(t, err)
-			require.Equal(t, max, len(set))
-			for i := 0; i < max; i++ {
+			require.Equal(t, maxNum, len(set))
+			for i := range maxNum {
 				// According to the Storage contract code.
 				require.Equal(t, expected[start+i], set[i].Value().([]byte), start+i)
 			}
@@ -1502,7 +1503,7 @@ func TestClient_IteratorSessions(t *testing.T) {
 
 	t.Run("traverse, request more than exists", func(t *testing.T) {
 		sID, iID := prepareSession(t)
-		for i := 0; i < storageItemsCount/config.DefaultMaxIteratorResultItems; i++ {
+		for range storageItemsCount / config.DefaultMaxIteratorResultItems {
 			set, err := c.TraverseIterator(sID, iID, config.DefaultMaxIteratorResultItems)
 			require.NoError(t, err)
 			require.Equal(t, config.DefaultMaxIteratorResultItems, len(set))
@@ -1532,7 +1533,7 @@ func TestClient_IteratorSessions(t *testing.T) {
 			assert.Equal(t, 1, len(set))
 			wg.Done()
 		}
-		for i := 0; i < storageItemsCount; i++ {
+		for range storageItemsCount {
 			go check(t)
 		}
 		wg.Wait()
@@ -1672,11 +1673,11 @@ func TestClient_Iterator_SessionConfigVariations(t *testing.T) {
 		require.True(t, ok)
 		require.NotEmpty(t, iterator.ID)
 		require.Empty(t, iterator.Values)
-		max := 84
-		actual, err := c.TraverseIterator(res.Session, *iterator.ID, max)
+		maxNum := 84
+		actual, err := c.TraverseIterator(res.Session, *iterator.ID, maxNum)
 		require.NoError(t, err)
-		require.Equal(t, max, len(actual))
-		for i := 0; i < max; i++ {
+		require.Equal(t, maxNum, len(actual))
+		for i := range maxNum {
 			// According to the Storage contract code.
 			require.Equal(t, expected[i], actual[i].Value().([]byte), i)
 		}
@@ -1695,14 +1696,14 @@ func TestClient_Iterator_SessionConfigVariations(t *testing.T) {
 
 		// Fill in expected stackitems set during the first test.
 		expected = make([][]byte, storageItemsCount)
-		for i := 0; i < storageItemsCount; i++ {
+		for i := range storageItemsCount {
 			expected[i] = stackitem.NewBigInteger(big.NewInt(int64(i))).Bytes()
 		}
-		sort.Slice(expected, func(i, j int) bool {
-			if len(expected[i]) != len(expected[j]) {
-				return len(expected[i]) < len(expected[j])
+		slices.SortFunc(expected, func(a, b []byte) int {
+			if len(a) != len(b) {
+				return len(a) - len(b)
 			}
-			return bytes.Compare(expected[i], expected[j]) < 0
+			return bytes.Compare(a, b)
 		})
 		checkSessionEnabled(t, c)
 	})
@@ -1760,7 +1761,7 @@ func TestClient_Iterator_SessionConfigVariations(t *testing.T) {
 		require.NotEmpty(t, iterator.Values)
 		require.True(t, iterator.Truncated)
 		require.Equal(t, rpcSrv.config.MaxIteratorResultItems, len(iterator.Values))
-		for i := 0; i < rpcSrv.config.MaxIteratorResultItems; i++ {
+		for i := range rpcSrv.config.MaxIteratorResultItems {
 			// According to the Storage contract code.
 			require.Equal(t, expected[i], iterator.Values[i].Value().([]byte), i)
 		}
@@ -1808,6 +1809,15 @@ func TestClient_Wait(t *testing.T) {
 		b, err := chain.GetBlock(chain.GetHeaderHash(1))
 		require.NoError(t, err)
 		require.True(t, len(b.Transactions) > 0)
+
+		// Ensure Waiter constructor works properly.
+		if ws {
+			_, ok := act.Waiter.(*waiter.EventBased)
+			require.True(t, ok)
+		} else {
+			_, ok := act.Waiter.(*waiter.PollingBased)
+			require.True(t, ok)
+		}
 
 		check := func(t *testing.T, h util.Uint256, vub uint32, errExpected bool) {
 			rcvr := make(chan struct{})

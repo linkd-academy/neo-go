@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/io"
@@ -543,7 +544,7 @@ func (t *Trie) Collapse(depth int) {
 		panic("negative depth")
 	}
 	t.root = collapse(depth, t.root)
-	t.refcount = make(map[util.Uint256]*cachedNode)
+	clear(t.refcount)
 }
 
 func collapse(depth int, node Node) Node {
@@ -572,8 +573,8 @@ func collapse(depth int, node Node) Node {
 
 // Find returns a list of storage key-value pairs whose key is prefixed by the specified
 // prefix starting from the specified `prefix`+`from` path (not including the item at
-// the specified `prefix`+`from` path if so). The `max` number of elements is returned at max.
-func (t *Trie) Find(prefix, from []byte, max int) ([]storage.KeyValue, error) {
+// the specified `prefix`+`from` path if so). The `maxNum` number of elements is returned at max.
+func (t *Trie) Find(prefix, from []byte, maxNum int) ([]storage.KeyValue, error) {
 	if len(prefix) > MaxKeyLength {
 		return nil, errors.New("invalid prefix length")
 	}
@@ -616,13 +617,13 @@ func (t *Trie) Find(prefix, from []byte, max int) ([]storage.KeyValue, error) {
 		if leaf, ok := node.(*LeafNode); ok {
 			if from == nil || !bytes.Equal(pathToNode, from) { // (*Billet).traverse includes `from` path into result if so. Need to filter out manually.
 				res = append(res, storage.KeyValue{
-					Key:   append(bytes.Clone(prefix), pathToNode...),
+					Key:   slices.Concat(prefix, pathToNode),
 					Value: bytes.Clone(leaf.value),
 				})
 				count++
 			}
 		}
-		return count >= max
+		return count >= maxNum
 	}
 	_, err = b.traverse(start, path, fromP, process, false, false)
 	if err != nil && !errors.Is(err, errStop) {

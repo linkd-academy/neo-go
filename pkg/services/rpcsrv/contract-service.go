@@ -243,6 +243,7 @@ func (s *Server) getHistoricParams(reqParams params.Params) (uint32, *neorpc.Err
 	return height + 1, nil
 }
 
+
 func (s *Server) prepareInvocationContext(t trigger.Type, script []byte, contractScriptHash util.Uint160, tx *transaction.Transaction, nextH *uint32, verbose bool) (*interop.Context, *neorpc.Error) {
 	var (
 		err error
@@ -266,10 +267,7 @@ func (s *Server) prepareInvocationContext(t trigger.Type, script []byte, contrac
 	if t == trigger.Verification {
 		// We need this special case because witnesses verification is not the simple System.Contract.Call,
 		// and we need to define exactly the amount of gas consumed for a contract witness verification.
-		gasPolicy := s.chain.GetMaxVerificationGAS()
-		if ic.VM.GasLimit > gasPolicy {
-			ic.VM.GasLimit = gasPolicy
-		}
+		ic.VM.GasLimit = min(ic.VM.GasLimit, s.chain.GetMaxVerificationGAS())
 
 		err = s.chain.InitVerificationContext(ic, contractScriptHash, &transaction.Witness{InvocationScript: script, VerificationScript: []byte{}})
 		if err != nil {
@@ -475,6 +473,7 @@ func (s *Server) traverseIterator(reqParams params.Params) (any, *neorpc.Error) 
 }
 
 // calculateNetworkFee calculates network fee for the transaction.
+// calculateNetworkFee calculates network fee for the transaction.
 func (s *Server) calculateNetworkFee(reqParams params.Params) (any, *neorpc.Error) {
 	if len(reqParams) < 1 {
 		return 0, neorpc.ErrInvalidParams
@@ -494,13 +493,9 @@ func (s *Server) calculateNetworkFee(reqParams params.Params) (any, *neorpc.Erro
 	size := len(hashablePart) + io.GetVarSize(len(tx.Signers))
 	var (
 		netFee int64
-		// Verification GAS cost can't exceed this policy.
-		gasLimit = s.chain.GetMaxVerificationGAS()
+		// Verification GAS cost can't exceed chin policy, but RPC config can limit it further.
+		gasLimit = min(s.chain.GetMaxVerificationGAS(), int64(s.config.MaxGasInvoke))
 	)
-	if gasLimit > int64(s.config.MaxGasInvoke) {
-		// But we honor instance configuration as well.
-		gasLimit = int64(s.config.MaxGasInvoke)
-	}
 	for i, signer := range tx.Signers {
 		w := tx.Scripts[i]
 		if len(w.InvocationScript) == 0 { // No invocation provided, try to infer one.
@@ -520,7 +515,7 @@ func (s *Server) calculateNetworkFee(reqParams params.Params) (any, *neorpc.Erro
 					paramz = []manifest.Parameter{{Type: smartcontract.SignatureType}}
 				} else if nSigs, _, ok := vm.ParseMultiSigContract(w.VerificationScript); ok {
 					paramz = make([]manifest.Parameter, nSigs)
-					for j := 0; j < nSigs; j++ {
+					for j := range paramz {
 						paramz[j] = manifest.Parameter{Type: smartcontract.SignatureType}
 					}
 				}

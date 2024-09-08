@@ -3,7 +3,7 @@ REPONAME = "neo-go"
 NETMODE ?= "privnet"
 BINARY=neo-go
 BINARY_PATH=./bin/$(BINARY)$(shell go env GOEXE)
-GO_VERSION ?= 1.20
+GO_VERSION ?= 1.23
 DESTDIR = ""
 SYSCONFIGDIR = "/etc"
 BINDIR = "/usr/bin"
@@ -21,6 +21,8 @@ MODVERSION ?= "$(shell cat go.mod | cat go.mod | sed -r -n -e 's|.*pkg/interop (
 BUILD_FLAGS = "-X '$(REPO)/pkg/config.Version=$(VERSION)' -X '$(REPO)/cli/smartcontract.ModVersion=$(MODVERSION)'"
 
 IMAGE_REPO=nspccdev/neo-go
+
+DISABLE_NEOTEST_COVER=1
 
 # All of the targets are phony here because we don't really use make dependency
 # tracking for files

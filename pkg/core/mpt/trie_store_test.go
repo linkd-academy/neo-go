@@ -2,6 +2,7 @@ package mpt
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
@@ -15,10 +16,10 @@ func TestTrieStore_TestTrieOperations(t *testing.T) {
 	st := NewTrieStore(source.root.Hash(), ModeAll, backed)
 
 	t.Run("forbidden operations", func(t *testing.T) {
-		require.ErrorIs(t, st.SeekGC(storage.SeekRange{}, nil), ErrForbiddenTrieStoreOperation)
+		require.ErrorIs(t, st.SeekGC(storage.SeekRange{}, nil), errors.ErrUnsupported)
 		_, err := st.Get([]byte{byte(storage.STTokenTransferInfo)})
-		require.ErrorIs(t, err, ErrForbiddenTrieStoreOperation)
-		require.ErrorIs(t, st.PutChangeSet(nil, nil), ErrForbiddenTrieStoreOperation)
+		require.ErrorIs(t, err, errors.ErrUnsupported)
+		require.ErrorIs(t, st.PutChangeSet(nil, nil), errors.ErrUnsupported)
 	})
 
 	t.Run("Get", func(t *testing.T) {
@@ -49,7 +50,7 @@ func TestTrieStore_TestTrieOperations(t *testing.T) {
 				return true
 			})
 			require.Equal(t, 4, len(res))
-			for i := 0; i < len(res); i++ {
+			for i := range res {
 				require.Equal(t, byte(storage.STStorage), res[i][0])
 				if i < len(res)-1 {
 					cmp := bytes.Compare(res[i], res[i+1])

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 
 	ojson "github.com/nspcc-dev/go-ordered-json"
@@ -230,7 +231,7 @@ func TestManagement_NativeUpdate(t *testing.T) {
 	})
 
 	// Add some blocks up to the Cockatrice enabling height and check the default natives state.
-	for i := 0; i < cockatriceHeight-1; i++ {
+	for range cockatriceHeight - 1 {
 		c.AddNewBlock(t)
 		for _, name := range nativenames.All {
 			h := state.CreateNativeContractHash(name)
@@ -274,7 +275,7 @@ func TestManagement_NativeUpdate_Call(t *testing.T) {
 	})
 
 	// Invoke Cockatrice-dependant method before Cockatrice should fail.
-	for i := 0; i < cockatriceHeight-1; i++ {
+	for range cockatriceHeight - 1 {
 		c.InvokeFail(t, "at instruction 45 (SYSCALL): System.Contract.Call failed: method not found: getCommitteeAddress/0", method)
 	}
 
@@ -423,8 +424,7 @@ func TestManagement_ContractDeploy(t *testing.T) {
 	})
 	t.Run("bad methods in manifest 1", func(t *testing.T) {
 		badManifest := cs1.Manifest
-		badManifest.ABI.Methods = make([]manifest.Method, len(cs1.Manifest.ABI.Methods))
-		copy(badManifest.ABI.Methods, cs1.Manifest.ABI.Methods)
+		badManifest.ABI.Methods = slices.Clone(cs1.Manifest.ABI.Methods)
 		badManifest.ABI.Methods[0].Offset = 100500 // out of bounds
 		manifB, err := json.Marshal(&badManifest)
 		require.NoError(t, err)
@@ -433,8 +433,7 @@ func TestManagement_ContractDeploy(t *testing.T) {
 	})
 	t.Run("bad methods in manifest 2", func(t *testing.T) {
 		var badManifest = cs1.Manifest
-		badManifest.ABI.Methods = make([]manifest.Method, len(cs1.Manifest.ABI.Methods))
-		copy(badManifest.ABI.Methods, cs1.Manifest.ABI.Methods)
+		badManifest.ABI.Methods = slices.Clone(cs1.Manifest.ABI.Methods)
 		badManifest.ABI.Methods[0].Offset = len(cs1.NEF.Script) - 2 // Ends with `CALLT(X,X);RET`.
 
 		manifB, err := json.Marshal(badManifest)
@@ -444,8 +443,7 @@ func TestManagement_ContractDeploy(t *testing.T) {
 	})
 	t.Run("duplicated methods in manifest 1", func(t *testing.T) {
 		badManifest := cs1.Manifest
-		badManifest.ABI.Methods = make([]manifest.Method, len(cs1.Manifest.ABI.Methods))
-		copy(badManifest.ABI.Methods, cs1.Manifest.ABI.Methods)
+		badManifest.ABI.Methods = slices.Clone(cs1.Manifest.ABI.Methods)
 		badManifest.ABI.Methods[0] = badManifest.ABI.Methods[1] // duplicates
 		manifB, err := json.Marshal(&badManifest)
 		require.NoError(t, err)
@@ -454,8 +452,7 @@ func TestManagement_ContractDeploy(t *testing.T) {
 	})
 	t.Run("duplicated events in manifest 1", func(t *testing.T) {
 		badManifest := cs1.Manifest
-		badManifest.ABI.Methods = make([]manifest.Method, len(cs1.Manifest.ABI.Methods))
-		copy(badManifest.ABI.Methods, cs1.Manifest.ABI.Methods)
+		badManifest.ABI.Methods = slices.Clone(cs1.Manifest.ABI.Methods)
 		badManifest.ABI.Events = []manifest.Event{{Name: "event"}, {Name: "event"}} // duplicates
 		manifB, err := json.Marshal(&badManifest)
 		require.NoError(t, err)

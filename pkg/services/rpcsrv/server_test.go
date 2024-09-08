@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1174,7 +1174,7 @@ var rpcTestCases = map[string][]rpcTestCase{
 			params: "[]",
 			result: func(e *executor) any {
 				expected, _ := e.chain.GetCommittee()
-				sort.Sort(expected)
+				slices.SortFunc(expected, (*keys.PublicKey).Cmp)
 				return &expected
 			},
 		},
@@ -1352,11 +1352,16 @@ var rpcTestCases = map[string][]rpcTestCase{
 				require.EqualValues(t, cfg.MemPoolSize, resp.Protocol.MemoryPoolMaxTransactions)
 				require.EqualValues(t, cfg.ValidatorsCount, resp.Protocol.ValidatorsCount)
 				require.EqualValues(t, cfg.InitialGASSupply, resp.Protocol.InitialGasDistribution)
+				require.EqualValues(t, cfg.SeedList, resp.Protocol.SeedList)
 
 				require.Equal(t, 0, len(resp.Protocol.CommitteeHistory))
 				require.True(t, resp.Protocol.P2PSigExtensions) // Yeah, notary is enabled.
 				require.False(t, resp.Protocol.StateRootInHeader)
 				require.Equal(t, 0, len(resp.Protocol.ValidatorsHistory))
+
+				standbyCommittee, err := keys.NewPublicKeysFromStrings(cfg.StandbyCommittee)
+				require.NoError(t, err)
+				require.EqualValues(t, standbyCommittee, resp.Protocol.StandbyCommittee)
 			},
 		},
 	},
@@ -2969,7 +2974,7 @@ func testRPCProtocol(t *testing.T, doRPCCall func(string, string, *testing.T) []
 		for _, tx := range mp.GetVerifiedTransactions() {
 			expected = append(expected, tx.Hash())
 		}
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			tx := transaction.New([]byte{byte(opcode.PUSH1)}, 0)
 			tx.Signers = []transaction.Signer{{Account: util.Uint160{1, 2, 3}}}
 			assert.NoError(t, mp.Add(tx, &FeerStub{}))
@@ -4133,7 +4138,7 @@ func BenchmarkHandleIn(b *testing.B) {
 	do := func(b *testing.B, req []byte) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b.StopTimer()
 			in := new(params.In)
 			b.StartTimer()

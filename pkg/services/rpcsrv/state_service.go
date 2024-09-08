@@ -118,6 +118,7 @@ func (s *Server) getState(ps params.Params) (any, *neorpc.Error) {
 	return res, nil
 }
 
+
 func (s *Server) findStates(ps params.Params) (any, *neorpc.Error) {
 	root, respErr := s.getStateRootFromParam(ps.Value(0))
 	if respErr != nil {
@@ -155,9 +156,7 @@ func (s *Server) findStates(ps params.Params) (any, *neorpc.Error) {
 		if err != nil {
 			return nil, neorpc.WrapErrorWithData(neorpc.ErrInvalidParams, fmt.Sprintf("invalid count: %s", err))
 		}
-		if count > s.config.MaxFindResultItems {
-			count = s.config.MaxFindResultItems
-		}
+		count = min(count, s.config.MaxFindResultItems)
 	}
 	cs, respErr := s.getHistoricalContractState(root, csHash)
 	if respErr != nil {
