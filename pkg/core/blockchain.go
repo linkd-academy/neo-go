@@ -550,8 +550,6 @@ func (bc *Blockchain) init() error {
 	updateHeaderHeightMetric(bc.HeaderHeight())
 	err = bc.updateExtensibleWhitelist(bHeight)
 
-	bc.dao.Store.Save("initial_state.gob")
-
 	return err
 }
 
