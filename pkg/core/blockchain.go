@@ -406,6 +406,8 @@ func (bc *Blockchain) SetNotary(mod native.NotaryService) {
 
 func (bc *Blockchain) init() error {
 	// If we could not find the version in the Store, we know that there is nothing stored.
+	// restoreErrorbc.dao.Store.Restore("initial_state.gob")
+
 	ver, err := bc.dao.GetVersion()
 	if err != nil {
 		bc.log.Info("no storage version found! creating genesis block")
@@ -546,8 +548,11 @@ func (bc *Blockchain) init() error {
 	updateBlockHeightMetric(bHeight)
 	updatePersistedHeightMetric(bHeight)
 	updateHeaderHeightMetric(bc.HeaderHeight())
+	err = bc.updateExtensibleWhitelist(bHeight)
 
-	return bc.updateExtensibleWhitelist(bHeight)
+	bc.dao.Store.Save("initial_state.gob")
+
+	return err
 }
 
 // jumpToState is an atomic operation that changes Blockchain state to the one
