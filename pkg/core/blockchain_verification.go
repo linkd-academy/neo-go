@@ -8,6 +8,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/dao"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop"
+	"github.com/nspcc-dev/neo-go/pkg/core/mempool"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
@@ -228,4 +229,120 @@ func (bc *Blockchain) verifyTxAttributes(d *dao.Simple, tx *transaction.Transact
 		}
 	}
 	return nil
+}
+
+
+// VerifyTx verifies whether transaction is bonafide or not relative to the
+// current blockchain state. Note that this verification is completely isolated
+// from the main node's mempool.
+func (bc *Blockchain) VerifyTx(t *transaction.Transaction) error {
+	var mp = mempool.New(1, 0, false, nil)
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+	return bc.verifyAndPoolTx(t, mp, bc)
+}
+
+// Various errors that could be returned upon verification.
+var (
+	ErrTxExpired         = errors.New("transaction has expired")
+	ErrInsufficientFunds = errors.New("insufficient funds")
+	ErrTxSmallNetworkFee = errors.New("too small network fee")
+	ErrTxTooBig          = errors.New("too big transaction")
+	ErrMemPoolConflict   = errors.New("invalid transaction due to conflicts with the memory pool")
+	ErrInvalidScript     = errors.New("invalid script")
+	ErrInvalidAttribute  = errors.New("invalid attribute")
+)
+
+// verifyAndPoolTx verifies whether a transaction is bonafide or not and tries
+// to add it to the mempool given.
+func (bc *Blockchain) verifyAndPoolTx(t *transaction.Transaction, pool *mempool.Pool, feer mempool.Feer, data ...any) error {
+	// This code can technically be moved out of here, because it doesn't
+	// really require a chain lock.
+	err := vm.IsScriptCorrect(t.Script, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidScript, err)
+	}
+
+	height := bc.BlockHeight()
+	isPartialTx := data != nil
+	if t.ValidUntilBlock <= height || !isPartialTx && t.ValidUntilBlock > height+bc.config.MaxValidUntilBlockIncrement {
+		return fmt.Errorf("%w: ValidUntilBlock = %d, current height = %d", ErrTxExpired, t.ValidUntilBlock, height)
+	}
+	// Policying.
+	if err := bc.contracts.Policy.CheckPolicy(bc.dao, t); err != nil {
+		// Only one %w can be used.
+		return fmt.Errorf("%w: %w", ErrPolicy, err)
+	}
+	if t.SystemFee > bc.config.MaxBlockSystemFee {
+		return fmt.Errorf("%w: too big system fee (%d > MaxBlockSystemFee %d)", ErrPolicy, t.SystemFee, bc.config.MaxBlockSystemFee)
+	}
+	size := t.Size()
+	if size > transaction.MaxTransactionSize {
+		return fmt.Errorf("%w: (%d > MaxTransactionSize %d)", ErrTxTooBig, size, transaction.MaxTransactionSize)
+	}
+	needNetworkFee := int64(size)*bc.FeePerByte() + bc.CalculateAttributesFee(t)
+	netFee := t.NetworkFee - needNetworkFee
+	if netFee < 0 {
+		return fmt.Errorf("%w: net fee is %v, need %v", ErrTxSmallNetworkFee, t.NetworkFee, needNetworkFee)
+	}
+	// check that current tx wasn't included in the conflicts attributes of some other transaction which is already in the chain
+	if err := bc.dao.HasTransaction(t.Hash(), t.Signers, height, bc.config.MaxTraceableBlocks); err != nil {
+		switch {
+		case errors.Is(err, dao.ErrAlreadyExists):
+			return ErrAlreadyExists
+		case errors.Is(err, dao.ErrHasConflicts):
+			return fmt.Errorf("blockchain: %w", ErrHasConflicts)
+		default:
+			return err
+		}
+	}
+	err = bc.verifyTxWitnesses(t, nil, isPartialTx, netFee)
+	if err != nil {
+		return err
+	}
+	if err := bc.verifyTxAttributes(bc.dao, t, isPartialTx); err != nil {
+		return err
+	}
+	err = pool.Add(t, feer, data...)
+	if err != nil {
+		switch {
+		case errors.Is(err, mempool.ErrConflict):
+			return ErrMemPoolConflict
+		case errors.Is(err, mempool.ErrDup):
+			return ErrAlreadyInPool
+		case errors.Is(err, mempool.ErrInsufficientFunds):
+			return ErrInsufficientFunds
+		case errors.Is(err, mempool.ErrOOM):
+			return ErrOOM
+		case errors.Is(err, mempool.ErrConflictsAttribute):
+			return fmt.Errorf("mempool: %w: %w", ErrHasConflicts, err)
+		default:
+			return err
+		}
+	}
+
+	return nil
+}
+
+
+
+func (bc *Blockchain) verifyHeader(currHeader, prevHeader *block.Header) error {
+	if bc.config.StateRootInHeader {
+		if bc.stateRoot.CurrentLocalHeight() == prevHeader.Index {
+			if sr := bc.stateRoot.CurrentLocalStateRoot(); currHeader.PrevStateRoot != sr {
+				return fmt.Errorf("%w: %s != %s",
+					ErrHdrInvalidStateRoot, currHeader.PrevStateRoot.StringLE(), sr.StringLE())
+			}
+		}
+	}
+	if prevHeader.Hash() != currHeader.PrevHash {
+		return ErrHdrHashMismatch
+	}
+	if prevHeader.Index+1 != currHeader.Index {
+		return ErrHdrIndexMismatch
+	}
+	if prevHeader.Timestamp >= currHeader.Timestamp {
+		return ErrHdrInvalidTimestamp
+	}
+	return bc.verifyHeaderWitnesses(currHeader, prevHeader)
 }

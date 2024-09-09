@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"go.uber.org/zap"
 )
 
@@ -588,4 +589,41 @@ func (bc *Blockchain) CalculateAttributesFee(tx *transaction.Transaction) int64 
 // P2PSigExtensionsEnabled defines whether P2P signature extensions are enabled.
 func (bc *Blockchain) P2PSigExtensionsEnabled() bool {
 	return bc.config.P2PSigExtensions
+}
+
+// IsTxStillRelevant is a callback for mempool transaction filtering after the
+// new block addition. It returns false for transactions added by the new block
+// (passed via txpool) and does witness reverification for non-standard
+// contracts. It operates under the assumption that full transaction verification
+// was already done so we don't need to check basic things like size, input/output
+// correctness, presence in blocks before the new one, etc.
+func (bc *Blockchain) IsTxStillRelevant(t *transaction.Transaction, txpool *mempool.Pool, isPartialTx bool) bool {
+	var (
+		recheckWitness bool
+		curheight      = bc.BlockHeight()
+	)
+
+	if t.ValidUntilBlock <= curheight {
+		return false
+	}
+	if txpool == nil {
+		if bc.dao.HasTransaction(t.Hash(), t.Signers, curheight, bc.config.MaxTraceableBlocks) != nil {
+			return false
+		}
+	} else if txpool.HasConflicts(t, bc) {
+		return false
+	}
+	if err := bc.verifyTxAttributes(bc.dao, t, isPartialTx); err != nil {
+		return false
+	}
+	for i := range t.Scripts {
+		if !vm.IsStandardContract(t.Scripts[i].VerificationScript) {
+			recheckWitness = true
+			break
+		}
+	}
+	if recheckWitness {
+		return bc.verifyTxWitnesses(t, nil, isPartialTx) == nil
+	}
+	return true
 }

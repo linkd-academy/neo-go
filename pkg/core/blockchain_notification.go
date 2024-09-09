@@ -174,8 +174,6 @@ func parseUint160(itm stackitem.Item) (util.Uint160, error) {
 	return util.Uint160DecodeBytesBE(bytes)
 }
 
-
-
 // RegisterPostBlock appends provided function to the list of functions which should be run after new block
 // is stored.
 func (bc *Blockchain) RegisterPostBlock(f func(func(*transaction.Transaction, *mempool.Pool, bool) bool, *mempool.Pool, *block.Block)) {
