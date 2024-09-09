@@ -423,3 +423,64 @@ func (s *Server) getBlocks(reqParams params.Params) (any, *neorpc.Error) {
 
 	return blocks, nil
 }
+
+func (s *Server) getBlocksWithTransactions(reqParams params.Params) (any, *neorpc.Error) {
+	start, err := reqParams.Value(0).GetInt()
+	if err != nil || start < 0 {
+		return nil, neorpc.ErrInvalidParams
+	}
+
+	end, err := reqParams.Value(1).GetInt()
+	if err != nil || end < 0 || end < start {
+		return nil, neorpc.ErrInvalidParams
+	}
+
+	blockCount := s.chain.BlockHeight()
+	if uint32(start) > blockCount {
+		return nil, neorpc.ErrInvalidParams
+	}
+
+	if uint32(end) > blockCount {
+		end = int(blockCount)
+	}
+
+	// Limitar a até 20 blocos
+	if end-start+1 > 20 {
+		end = start + 19
+	}
+
+	blocks := make([]*block.Block, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		hash := s.chain.GetHeaderHash(uint32(i))
+		block, err := s.chain.GetBlock(hash)
+		if err != nil {
+			return nil, neorpc.WrapErrorWithData(neorpc.ErrUnknownBlock, err.Error())
+		}
+		// Verifica se o bloco tem transações
+		if len(block.Transactions) > 0 {
+			blocks = append(blocks, block)
+		}
+	}
+
+	return blocks, nil
+}
+
+func (s *Server) getTransactionsForHash160(reqParams params.Params) (any, *neorpc.Error) {
+	hash, err := reqParams.Value(0).GetUint160FromHex()
+	if err != nil {
+		return nil, neorpc.ErrInvalidParams
+	}
+
+	transactions, err := s.chain.GetTransactionForHash160(hash)
+	if err != nil {
+		return nil, neorpc.ErrUnknownTransaction
+	}
+
+	// Retornar uma lista de transações ou somente hashes, dependendo da necessidade
+	txHashes := make([]string, len(transactions))
+	for i, tx := range transactions {
+		txHashes[i] = tx.Hash().StringLE()
+	}
+
+	return txHashes, nil
+}

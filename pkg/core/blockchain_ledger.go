@@ -138,13 +138,12 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		systemInterop.ReuseVM(v)
 		v.LoadScriptWithFlags(tx.Script, callflag.All)
 		v.GasLimit = tx.SystemFee
-
+	
 		err := systemInterop.Exec()
 		var faultException string
 		if !v.HasFailed() {
 			_, err := systemInterop.DAO.Persist()
 			if err != nil {
-				// Release goroutines, don't care about errors, we already have one.
 				close(aerchan)
 				<-aerdone
 				return fmt.Errorf("failed to persist invocation results: %w", err)
@@ -156,6 +155,21 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 				zap.Error(err))
 			faultException = err.Error()
 		}
+	
+		// Processar eventos/notificações e capturar hash160
+		for _, notification := range systemInterop.Notifications {
+			if notification.ScriptHash != (util.Uint160{}) { // Check against zero value instead of nil
+				// Aqui você associa o hash160 à transação e salva no DAO
+				err := cache.PutTransactionForHash160(notification.ScriptHash, tx)
+				if err != nil {
+					return fmt.Errorf("failed to save transaction for hash160: %w", err)
+				}
+				
+			}
+
+			
+		}
+	
 		aer := &state.AppExecResult{
 			Container: tx.Hash(),
 			Execution: state.Execution{
@@ -170,6 +184,7 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		appExecResults = append(appExecResults, aer)
 		aerchan <- aer
 	}
+	
 
 	aer, _, err = bc.runPersist(bc.contracts.GetPostPersistScript(), block, cache, trigger.PostPersist, v)
 	if err != nil {

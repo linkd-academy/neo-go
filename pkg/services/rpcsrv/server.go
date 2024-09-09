@@ -89,6 +89,9 @@ type (
 		VerifyWitness(util.Uint160, hash.Hashable, *transaction.Witness, int64) (int64, error)
 		mempool.Feer // fee interface
 		ContractStorageSeeker
+
+
+		GetTransactionForHash160(hash util.Uint160) ([]*transaction.Transaction, error)
 	}
 
 	// ContractStorageSeeker is the interface `findstorage*` handlers need to be able to
@@ -198,7 +201,6 @@ var rpcHandlers = map[string]func(*Server, params.Params) (any, *neorpc.Error){
 	"getnep11transfers":            (*Server).getNEP11Transfers,
 	"getnep17balances":             (*Server).getNEP17Balances,
 	"getnep17transfers":            (*Server).getNEP17Transfers,
-	"getblocks":                    (*Server).getBlocks,
 	"getpeers":                     (*Server).getPeers,
 	"getproof":                     (*Server).getProof,
 	"getrawmempool":                (*Server).getRawMempool,
@@ -228,6 +230,11 @@ var rpcHandlers = map[string]func(*Server, params.Params) (any, *neorpc.Error){
 	"traverseiterator":             (*Server).traverseIterator,
 	"validateaddress":              (*Server).validateAddress,
 	"verifyproof":                  (*Server).verifyProof,
+
+	//Custom RPC endpoints
+	"getBlocks": 					(*Server).getBlocks,
+	"getBlocksWithTransactions": 	(*Server).getBlocksWithTransactions,
+	"getTransactionsForHash160": 	(*Server).getTransactionsForHash160,
 }
 
 var rpcWsHandlers = map[string]func(*Server, params.Params, *subscriber) (any, *neorpc.Error){

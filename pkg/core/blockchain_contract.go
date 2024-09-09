@@ -7,6 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
+	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"go.uber.org/zap"
 )
@@ -77,4 +78,12 @@ func (bc *Blockchain) GetNEP17Contracts() []util.Uint160 {
 // GetNEP11Contracts returns the list of deployed NEP-11 contracts.
 func (bc *Blockchain) GetNEP11Contracts() []util.Uint160 {
 	return bc.contracts.Management.GetNEP11Contracts(bc.dao)
+}
+
+func (bc *Blockchain) GetTransactionForHash160(hash util.Uint160) ([]*transaction.Transaction, error) {
+	transactions, err := bc.dao.GetTransactionsForHash160(hash)
+	if err != nil {
+		return nil, err
+	}
+	return transactions, nil
 }

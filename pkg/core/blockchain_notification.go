@@ -159,6 +159,11 @@ func (bc *Blockchain) handleNotification(note *state.NotificationEvent, d *dao.S
 			return
 		}
 	}
+
+	d.PutTransactionForHash160(from, note.Item)
+	d.PutTransactionForHash160(to, h)
+
+
 	bc.processTokenTransfer(d, transCache, h, b, note.ScriptHash, from, to, amount, id)
 }
 
