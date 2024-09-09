@@ -16,6 +16,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/statesync"
+	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -26,6 +27,15 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm"
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
 	"go.uber.org/zap"
+)
+
+// Various errors that could be returns upon header verification.
+var (
+	ErrHdrHashMismatch     = errors.New("previous header hash doesn't match")
+	ErrHdrIndexMismatch    = errors.New("previous header index doesn't match")
+	ErrHdrInvalidTimestamp = errors.New("block is not newer than the previous one")
+	ErrHdrStateRootSetting = errors.New("state root setting mismatch")
+	ErrHdrInvalidStateRoot = errors.New("state root for previous block is invalid")
 )
 
 func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error {
@@ -415,6 +425,11 @@ func (bc *Blockchain) IsExtensibleAllowed(u util.Uint160) bool {
 	return ok
 }
 
+// GetStorageItem returns an item from storage.
+func (bc *Blockchain) GetStorageItem(id int32, key []byte) state.StorageItem {
+	return bc.dao.GetStorageItem(id, key)
+}
+
 func (bc *Blockchain) runPersist(script []byte, block *block.Block, cache *dao.Simple, trig trigger.Type, v *vm.VM) (*state.AppExecResult, *vm.VM, error) {
 	systemInterop := bc.newInteropContext(trig, cache, block, nil)
 	if v == nil {
@@ -649,4 +664,149 @@ func (bc *Blockchain) getCurrentHF() config.Hardfork {
 		current = hf
 	}
 	return current
+}
+
+// IsTxStillRelevant is a callback for mempool transaction filtering after the
+// new block addition. It returns false for transactions added by the new block
+// (passed via txpool) and does witness reverification for non-standard
+// contracts. It operates under the assumption that full transaction verification
+// was already done so we don't need to check basic things like size, input/output
+// correctness, presence in blocks before the new one, etc.
+func (bc *Blockchain) IsTxStillRelevant(t *transaction.Transaction, txpool *mempool.Pool, isPartialTx bool) bool {
+	var (
+		recheckWitness bool
+		curheight      = bc.BlockHeight()
+	)
+
+	if t.ValidUntilBlock <= curheight {
+		return false
+	}
+	if txpool == nil {
+		if bc.dao.HasTransaction(t.Hash(), t.Signers, curheight, bc.config.MaxTraceableBlocks) != nil {
+			return false
+		}
+	} else if txpool.HasConflicts(t, bc) {
+		return false
+	}
+	if err := bc.verifyTxAttributes(bc.dao, t, isPartialTx); err != nil {
+		return false
+	}
+	for i := range t.Scripts {
+		if !vm.IsStandardContract(t.Scripts[i].VerificationScript) {
+			recheckWitness = true
+			break
+		}
+	}
+	if recheckWitness {
+		return bc.verifyTxWitnesses(t, nil, isPartialTx) == nil
+	}
+	return true
+}
+
+// VerifyTx verifies whether transaction is bonafide or not relative to the
+// current blockchain state. Note that this verification is completely isolated
+// from the main node's mempool.
+func (bc *Blockchain) VerifyTx(t *transaction.Transaction) error {
+	var mp = mempool.New(1, 0, false, nil)
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+	return bc.verifyAndPoolTx(t, mp, bc)
+}
+
+// PoolTx verifies and tries to add given transaction into the mempool. If not
+// given, the default mempool is used. Passing multiple pools is not supported.
+func (bc *Blockchain) PoolTx(t *transaction.Transaction, pools ...*mempool.Pool) error {
+	var pool = bc.memPool
+
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+	// Programmer error.
+	if len(pools) > 1 {
+		panic("too many pools given")
+	}
+	if len(pools) == 1 {
+		pool = pools[0]
+	}
+	return bc.verifyAndPoolTx(t, pool, bc)
+}
+
+// PoolTxWithData verifies and tries to add given transaction with additional data into the mempool.
+func (bc *Blockchain) PoolTxWithData(t *transaction.Transaction, data any, mp *mempool.Pool, feer mempool.Feer, verificationFunction func(tx *transaction.Transaction, data any) error) error {
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+
+	if verificationFunction != nil {
+		err := verificationFunction(t, data)
+		if err != nil {
+			return err
+		}
+	}
+	return bc.verifyAndPoolTx(t, mp, feer, data)
+}
+
+
+// persist flushes current in-memory Store contents to the persistent storage.
+func (bc *Blockchain) persist(isSync bool) (time.Duration, error) {
+	var (
+		start     = time.Now()
+		duration  time.Duration
+		persisted int
+		err       error
+	)
+
+	if isSync {
+		persisted, err = bc.dao.PersistSync()
+	} else {
+		persisted, err = bc.dao.Persist()
+	}
+	if err != nil {
+		return 0, err
+	}
+	if persisted > 0 {
+		bHeight, err := bc.persistent.GetCurrentBlockHeight()
+		if err != nil {
+			return 0, err
+		}
+		oldHeight := atomic.SwapUint32(&bc.persistedHeight, bHeight)
+		diff := bHeight - oldHeight
+
+		storedHeaderHeight, _, err := bc.persistent.GetCurrentHeaderHeight()
+		if err != nil {
+			return 0, err
+		}
+		duration = time.Since(start)
+		bc.log.Info("persisted to disk",
+			zap.Uint32("blocks", diff),
+			zap.Int("keys", persisted),
+			zap.Uint32("headerHeight", storedHeaderHeight),
+			zap.Uint32("blockHeight", bHeight),
+			zap.Duration("took", duration))
+
+		// update monitoring metrics.
+		updatePersistedHeightMetric(bHeight)
+	}
+
+	return duration, nil
+}
+
+
+// LastBatch returns last persisted storage batch.
+func (bc *Blockchain) LastBatch() *storage.MemBatch {
+	return bc.lastBatch
+}
+
+// GetAppExecResults returns application execution results with the specified trigger by the given
+// tx hash or block hash.
+func (bc *Blockchain) GetAppExecResults(hash util.Uint256, trig trigger.Type) ([]state.AppExecResult, error) {
+	return bc.dao.GetAppExecResults(hash, trig)
+}
+
+// SeekStorage performs seek operation over contract storage. Prefix is trimmed in the resulting pair's key.
+func (bc *Blockchain) SeekStorage(id int32, prefix []byte, cont func(k, v []byte) bool) {
+	bc.dao.Seek(id, storage.SeekRange{Prefix: prefix}, cont)
+}
+
+// GetConfig returns the config stored in the blockchain.
+func (bc *Blockchain) GetConfig() config.Blockchain {
+	return bc.config
 }

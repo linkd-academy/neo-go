@@ -2,11 +2,14 @@ package core
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/block"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop"
 	"github.com/nspcc-dev/neo-go/pkg/core/native"
+	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 )
@@ -96,4 +99,44 @@ func (bc *Blockchain) ApplyPolicyToTxSet(txes []*transaction.Transaction) []*tra
 		}
 	}
 	return txes
+}
+
+
+// GetCommittee returns the sorted list of public keys of nodes in committee.
+func (bc *Blockchain) GetCommittee() (keys.PublicKeys, error) {
+	pubs := bc.contracts.NEO.GetCommitteeMembers(bc.dao)
+	slices.SortFunc(pubs, (*keys.PublicKey).Cmp)
+	return pubs, nil
+}
+
+// ComputeNextBlockValidators returns current validators. Validators list
+// returned from this method is updated once per CommitteeSize number of blocks.
+// For the last block in the dBFT epoch this method returns the list of validators
+// recalculated from the latest relevant information about NEO votes; in this case
+// list of validators may differ from the one returned by GetNextBlockValidators.
+// For the not-last block of dBFT epoch this method returns the same list as
+// GetNextBlockValidators.
+func (bc *Blockchain) ComputeNextBlockValidators() []*keys.PublicKey {
+	return bc.contracts.NEO.ComputeNextBlockValidators(bc.dao)
+}
+
+// GetNextBlockValidators returns next block validators. Validators list returned
+// from this method is the sorted top NumOfCNs number of public keys from the
+// committee of the current dBFT round (that was calculated once for the
+// CommitteeSize number of blocks), thus, validators list returned from this
+// method is being updated once per (committee size) number of blocks, but not
+// every block.
+func (bc *Blockchain) GetNextBlockValidators() ([]*keys.PublicKey, error) {
+	return bc.contracts.NEO.GetNextBlockValidatorsInternal(bc.dao), nil
+}
+
+// GetEnrollments returns all registered validators.
+func (bc *Blockchain) GetEnrollments() ([]state.Validator, error) {
+	return bc.contracts.NEO.GetCandidates(bc.dao)
+}
+
+
+// FeePerByte returns transaction network fee per byte.
+func (bc *Blockchain) FeePerByte() int64 {
+	return bc.contracts.Policy.GetFeePerByteInternal(bc.dao)
 }
