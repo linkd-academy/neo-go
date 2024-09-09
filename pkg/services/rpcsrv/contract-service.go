@@ -661,3 +661,11 @@ func (s *Server) contractScriptHashFromParam(param *params.Param) (util.Uint160,
 	}
 	return result, nil
 }
+
+func (s *Server) getNEP11Transfers(ps params.Params) (any, *neorpc.Error) {
+	return s.getTokenTransfers(ps, true)
+}
+
+func (s *Server) getNEP17Transfers(ps params.Params) (any, *neorpc.Error) {
+	return s.getTokenTransfers(ps, false)
+}

@@ -198,6 +198,7 @@ var rpcHandlers = map[string]func(*Server, params.Params) (any, *neorpc.Error){
 	"getnep11transfers":            (*Server).getNEP11Transfers,
 	"getnep17balances":             (*Server).getNEP17Balances,
 	"getnep17transfers":            (*Server).getNEP17Transfers,
+	"getblocks":                    (*Server).getBlocks,
 	"getpeers":                     (*Server).getPeers,
 	"getproof":                     (*Server).getProof,
 	"getrawmempool":                (*Server).getRawMempool,
@@ -340,13 +341,7 @@ func New(chain Ledger, conf config.RPC, coreServer *network.Server,
 	}
 }
 
-func (s *Server) getNEP11Transfers(ps params.Params) (any, *neorpc.Error) {
-	return s.getTokenTransfers(ps, true)
-}
 
-func (s *Server) getNEP17Transfers(ps params.Params) (any, *neorpc.Error) {
-	return s.getTokenTransfers(ps, false)
-}
 
 // Name returns service name.
 func (s *Server) Name() string {
