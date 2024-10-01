@@ -1,6 +1,7 @@
 package native
 
 import (
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"encoding/binary"
 	"errors"
@@ -41,6 +42,7 @@ const (
 	Secp256r1Sha256    NamedCurveHash = 23
 	Secp256k1Keccak256 NamedCurveHash = 122
 	Secp256r1Keccak256 NamedCurveHash = 123
+	Ed25519Sha256      NamedCurveHash = 200
 )
 
 const cryptoContractID = -3
@@ -120,6 +122,14 @@ func newCrypto() *Crypto {
 		manifest.NewParameter("data", smartcontract.ByteArrayType))
 	md = newMethodAndPrice(c.keccak256, 1<<15, callflag.NoneFlag, config.HFCockatrice)
 	c.AddMethod(md, desc)
+
+	desc = newDescriptor("verifyWithEd25519", smartcontract.BoolType,
+		manifest.NewParameter("message", smartcontract.ByteArrayType),
+		manifest.NewParameter("pubkey", smartcontract.ByteArrayType),
+		manifest.NewParameter("signature", smartcontract.ByteArrayType))
+	md = newMethodAndPrice(c.verifyWithEd25519, 1<<15, callflag.NoneFlag)
+	c.AddMethod(md, desc)
+
 	return c
 }
 
@@ -185,6 +195,24 @@ func verifyWithECDsaGeneric(args []stackitem.Item, allowKeccak bool) stackitem.I
 	return stackitem.NewBool(res)
 }
 
+func (c *Crypto) verifyWithEd25519(_ *interop.Context, args []stackitem.Item) stackitem.Item {
+	msg, err := args[0].TryBytes()
+	if err != nil {
+		panic(fmt.Errorf("invalid message stackitem: %w", err))
+	}
+	pubkey, err := args[1].TryBytes()
+	if err != nil {
+		panic(fmt.Errorf("invalid pubkey stackitem: %w", err))
+	}
+	signature, err := args[2].TryBytes()
+	if err != nil {
+		panic(fmt.Errorf("invalid signature stackitem: %w", err))
+	}
+
+	valid := ed25519.Verify(pubkey, msg, signature)
+	return stackitem.NewBool(valid)
+}
+
 func curveHasherFromStackitem(si stackitem.Item, allowKeccak bool) (elliptic.Curve, HashFunc, error) {
 	curve, err := si.TryInteger()
 	if err != nil {
@@ -209,6 +237,8 @@ func curveHasherFromStackitem(si stackitem.Item, allowKeccak bool) (elliptic.Cur
 			return nil, nil, fmt.Errorf("%w: keccak hash", errors.ErrUnsupported)
 		}
 		return elliptic.P256(), Keccak256, nil
+	case int64(Ed25519Sha256):
+		return nil, nil, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: unknown curve/hash", errors.ErrUnsupported)
 	}

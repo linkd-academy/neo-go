@@ -22,6 +22,7 @@ const (
 	Secp256r1Sha256    NamedCurveHash = 23
 	Secp256k1Keccak256 NamedCurveHash = 122
 	Secp256r1Keccak256 NamedCurveHash = 123
+	Ed25519Sha256      NamedCurveHash = 200
 )
 
 // Sha256 calls `sha256` method of native CryptoLib contract and computes SHA256 hash of b.
@@ -99,4 +100,10 @@ func Bls12381Pairing(g1, g2 Bls12381Point) Bls12381Point {
 // computes Keccak256 hash of b.
 func Keccak256(b []byte) interop.Hash256 {
 	return neogointernal.CallWithToken(Hash, "keccak256", int(contract.NoneFlag), b).(interop.Hash256)
+}
+
+// VerifyWithEd25519 calls `verifyWithEd25519` method of native CryptoLib contract and
+// checks that sig is a correct msg's signature for the given pub (serialized public key on the given curve).
+func VerifyWithEd25519(msg []byte, pub interop.PublicKey, sig interop.Signature) bool {
+	return neogointernal.CallWithToken(Hash, "verifyWithEd25519", int(contract.NoneFlag), msg, pub, sig).(bool)
 }
