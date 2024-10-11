@@ -97,14 +97,12 @@ func (s *SQLiteStore) PutChangeSet(puts map[string][]byte, stores map[string][]b
 
 	for k, v := range puts {
 		hexKey := hex.EncodeToString([]byte(k))
-		fmt.Printf("Inserting key: %s, value: %x\n", hexKey, v)
 		if _, err := stmt.Exec(hexKey, v); err != nil {
 			return err
 		}
 	}
 	for k, v := range stores {
 		hexKey := hex.EncodeToString([]byte(k))
-		fmt.Printf("Inserting key: %s, value: %x\n", hexKey, v)
 		if _, err := stmt.Exec(hexKey, v); err != nil {
 			return err
 		}
