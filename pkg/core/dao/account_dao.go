@@ -19,8 +19,8 @@ func (dao *Simple) makeUserTransactionKey(account util.Uint160, txHash util.Uint
 
 	// Key with txHash
 	b := dao.getKeyBuf(1 + util.Uint160Size + util.Uint256Size)
-	b[0] = byte(storage.STUserTransactions)  // Prefix STUserTransactions
-	copy(b[1:], account.BytesBE())           // Adds the hash160
+	b[0] = byte(storage.STUserTransactions)        // Prefix STUserTransactions
+	copy(b[1:], account.BytesBE())                 // Adds the hash160
 	copy(b[1+util.Uint160Size:], txHash.BytesBE()) // Adds the transaction hash
 
 	// Log the key being generated
@@ -44,11 +44,14 @@ func (dao *Simple) PutTransactionForHash160(hash util.Uint160, tx *transaction.T
 		return buf.Err
 	}
 
+	dataBytes := buf.Bytes()
+
 	// Log the transaction and key being stored
 	log.Printf("Storing transaction for hash160: %x with txHash: %x", hash.BytesBE(), txHash.BytesBE())
-	log.Printf("Transaction data size: %d bytes", len(buf.Bytes()))
+	log.Printf("Transaction data size: %d bytes", len(dataBytes))
 
-	dao.Store.Put(key, buf.Bytes())
+	dao.Store.Put(key, dataBytes)
+
 	return nil
 }
 
@@ -88,8 +91,8 @@ func (dao *Simple) GetTransactionsForHash160(hash util.Uint160) ([]*transaction.
 // makeUserTransactionKeyWithoutTxHash creates the key for searching without txHash
 func (dao *Simple) makeUserTransactionKeyWithoutTxHash(account util.Uint160) []byte {
 	b := dao.getKeyBuf(1 + util.Uint160Size)
-	b[0] = byte(storage.STUserTransactions)  // Prefix STUserTransactions
-	copy(b[1:], account.BytesBE())           // Adds the hash160
+	b[0] = byte(storage.STUserTransactions) // Prefix STUserTransactions
+	copy(b[1:], account.BytesBE())          // Adds the hash160
 
 	// Log the key generated without txHash
 	log.Printf("Generated key for search without txHash: prefix: %x, account hash160: %x", b[0], account.BytesBE())

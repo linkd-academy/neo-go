@@ -138,7 +138,7 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		systemInterop.ReuseVM(v)
 		v.LoadScriptWithFlags(tx.Script, callflag.All)
 		v.GasLimit = tx.SystemFee
-	
+
 		err := systemInterop.Exec()
 		var faultException string
 		if !v.HasFailed() {
@@ -155,21 +155,12 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 				zap.Error(err))
 			faultException = err.Error()
 		}
-	
-		// Processar eventos/notificações e capturar hash160
-		for _, notification := range systemInterop.Notifications {
-			if notification.ScriptHash != (util.Uint160{}) { // Check against zero value instead of nil
-				// Aqui você associa o hash160 à transação e salva no DAO
-				err := cache.PutTransactionForHash160(notification.ScriptHash, tx)
-				if err != nil {
-					return fmt.Errorf("failed to save transaction for hash160: %w", err)
-				}
-				
-			}
 
-			
+		errSaveCache := cache.PutTransactionForHash160(tx.Sender(), tx)
+		if errSaveCache != nil {
+			return fmt.Errorf("failed to save transaction for hash160: %w", errSaveCache)
 		}
-	
+
 		aer := &state.AppExecResult{
 			Container: tx.Hash(),
 			Execution: state.Execution{
@@ -184,7 +175,6 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		appExecResults = append(appExecResults, aer)
 		aerchan <- aer
 	}
-	
 
 	aer, _, err = bc.runPersist(bc.contracts.GetPostPersistScript(), block, cache, trigger.PostPersist, v)
 	if err != nil {
@@ -271,7 +261,6 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 	}
 	return nil
 }
-
 
 // AddBlock accepts successive block for the Blockchain, verifies it and
 // stores internally. Eventually it will be persisted to the backing storage.
@@ -608,7 +597,6 @@ func (bc *Blockchain) PoolTxWithData(t *transaction.Transaction, data any, mp *m
 	return bc.verifyAndPoolTx(t, mp, feer, data)
 }
 
-
 // persist flushes current in-memory Store contents to the persistent storage.
 func (bc *Blockchain) persist(isSync bool) (time.Duration, error) {
 	var (
@@ -652,7 +640,6 @@ func (bc *Blockchain) persist(isSync bool) (time.Duration, error) {
 
 	return duration, nil
 }
-
 
 // LastBatch returns last persisted storage batch.
 func (bc *Blockchain) LastBatch() *storage.MemBatch {

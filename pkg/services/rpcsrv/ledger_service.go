@@ -63,8 +63,6 @@ func (s *Server) getBlockHash(reqParams params.Params) (any, *neorpc.Error) {
 	return s.chain.GetHeaderHash(num), nil
 }
 
-
-
 func (s *Server) getrawtransaction(reqParams params.Params) (any, *neorpc.Error) {
 	txHash, err := reqParams.Value(0).GetUint256()
 	if err != nil {
@@ -142,7 +140,6 @@ func (s *Server) getBlockSysFee(reqParams params.Params) (any, *neorpc.Error) {
 
 	return blockSysFee, nil
 }
-
 
 // getBlockHeader returns the corresponding block header information according to the specified script hash.
 func (s *Server) getBlockHeader(reqParams params.Params) (any, *neorpc.Error) {
@@ -278,7 +275,6 @@ func (s *Server) getApplicationLog(reqParams params.Params) (any, *neorpc.Error)
 	return result.NewApplicationLog(hash, appExecResults, trig), nil
 }
 
-
 func getTimestampsAndLimit(ps params.Params, index int) (uint64, uint64, int, int, error) {
 	var start, end uint64
 	var limit, page int
@@ -328,7 +324,6 @@ func getTimestampsAndLimit(ps params.Params, index int) (uint64, uint64, int, in
 	}
 	return start, end, limit, page, nil
 }
-
 
 // getCandidates returns the current list of candidates with their active/inactive voting status.
 
@@ -476,11 +471,5 @@ func (s *Server) getTransactionsForHash160(reqParams params.Params) (any, *neorp
 		return nil, neorpc.ErrUnknownTransaction
 	}
 
-	// Retornar uma lista de transações ou somente hashes, dependendo da necessidade
-	txHashes := make([]string, len(transactions))
-	for i, tx := range transactions {
-		txHashes[i] = tx.Hash().StringLE()
-	}
-
-	return txHashes, nil
+	return transactions, nil
 }
