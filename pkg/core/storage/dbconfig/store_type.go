@@ -8,4 +8,6 @@ const (
 	LevelDB = "leveldb"
 	// InMemoryDB represents in-memory storage name.
 	InMemoryDB = "inmemory"
+	// SQLite represents SQLite storage name.
+	SQLite = "sqlite"
 )

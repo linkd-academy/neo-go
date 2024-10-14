@@ -10,6 +10,7 @@ type (
 		Type           string         `yaml:"Type"`
 		LevelDBOptions LevelDBOptions `yaml:"LevelDBOptions"`
 		BoltDBOptions  BoltDBOptions  `yaml:"BoltDBOptions"`
+		SQLiteOptions  SQLiteOptions  `yaml:"SQLiteOptions"`
 	}
 	// LevelDBOptions configuration for LevelDB.
 	LevelDBOptions struct {
@@ -20,5 +21,10 @@ type (
 	BoltDBOptions struct {
 		FilePath string `yaml:"FilePath"`
 		ReadOnly bool   `yaml:"ReadOnly"`
+	}
+	// SQLiteOptions configuration for SQLite.
+	SQLiteOptions struct {
+		FilePath string `yaml:"FilePath"`
+		Reset    bool   `yaml:"Reset"`
 	}
 )

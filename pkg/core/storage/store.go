@@ -131,6 +131,8 @@ func NewStore(cfg dbconfig.DBConfiguration) (Store, error) {
 		store = NewMemoryStore()
 	case dbconfig.BoltDB:
 		store, err = NewBoltDBStore(cfg.BoltDBOptions)
+	case dbconfig.SQLite:
+		store, err = NewSQLiteStore(cfg.SQLiteOptions.FilePath, cfg.SQLiteOptions.Reset)
 	default:
 		return nil, fmt.Errorf("unknown storage: %s", cfg.Type)
 	}
