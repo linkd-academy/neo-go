@@ -1,0 +1,37 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Neo-Go Contract Compile",
+            "type": "go",
+            "request": "launch",
+            "program": "${workspaceFolder}/cli/main.go",
+            "args": [
+                "contract",
+                "compile",
+                "--config",
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.yml",
+                "-in",
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.go",
+                "-m",
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.manifest.json"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug Neo-Go CLI",
+            "type": "go",
+            "request": "launch",
+            "program": "${workspaceFolder}/cli/main.go",
+            "args": [
+                "node",
+                "--config-file",
+                "${workspaceFolder}/../neo-javascript-sdk/network.yml"
+            ],
+            "cwd": "${workspaceFolder}/../neo-javascript-sdk"
+        }
+    ]
+}

@@ -199,6 +199,10 @@ func NewCommands() []*cli.Command {
 						Usage: "Do not check compliance with supported standards",
 					},
 					&cli.BoolFlag{
+						Name:  "include-types",
+						Usage: "Include struct type information in manifest extra field",
+					},
+					&cli.BoolFlag{
 						Name:  "no-events",
 						Usage: "Do not check emitted events with the manifest",
 					},
@@ -484,6 +488,7 @@ func contractCompile(ctx *cli.Context) error {
 		NoStandardCheck:    ctx.Bool("no-standards"),
 		NoEventsCheck:      ctx.Bool("no-events"),
 		NoPermissionsCheck: ctx.Bool("no-permissions"),
+		IncludeTypes:       ctx.Bool("include-types"),
 
 		GuessEventTypes: ctx.Bool("guess-eventtypes"),
 	}

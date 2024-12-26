@@ -512,9 +512,17 @@ func (d *DebugParam) UnmarshalJSON(data []byte) error {
 
 // ToManifestParameter converts DebugParam to manifest.Parameter.
 func (d *DebugParam) ToManifestParameter() manifest.Parameter {
+	paramType := d.TypeSC
+	if d.ExtendedType != nil {
+		if d.ExtendedType.Value != nil && d.ExtendedType.Value.Name != "" {
+			paramType = d.ExtendedType.Value.Base
+		} else if d.ExtendedType.Name != "" {
+			paramType = d.ExtendedType.Base
+		}
+	}
 	return manifest.Parameter{
 		Name: d.Name,
-		Type: d.TypeSC,
+		Type: paramType,
 	}
 }
 
@@ -530,7 +538,16 @@ func (m *MethodDebugInfo) ToManifestMethod() manifest.Method {
 	result.Name = m.Name.Name
 	result.Offset = int(m.Range.Start)
 	result.Parameters = parameters
-	result.ReturnType = m.ReturnTypeSC
+
+	returnType := m.ReturnTypeSC
+	if m.ReturnTypeExtended != nil {
+		if m.ReturnTypeExtended.Value != nil && m.ReturnTypeExtended.Value.Name != "" {
+			returnType = m.ReturnTypeExtended.Value.Base
+		} else if m.ReturnTypeExtended.Name != "" {
+			returnType = m.ReturnTypeExtended.Base
+		}
+	}
+	result.ReturnType = returnType
 	return result
 }
 
@@ -578,6 +595,48 @@ func parsePairJSON(data []byte, sep string) (string, string, error) {
 	return ss[0], ss[1], nil
 }
 
+// processStructType extracts information about struct fields and their types
+func processStructType(st *types.Struct) map[string]interface{} {
+	fields := make(map[string]interface{})
+	for i := 0; i < st.NumFields(); i++ {
+		field := st.Field(i)
+		fields[field.Name()] = map[string]interface{}{
+			"type": toNeoTypeString(field.Type()),
+			"name": field.Name(),
+		}
+	}
+	return fields
+}
+
+// toNeoTypeString converts Go types to Neo type strings
+func toNeoTypeString(typ types.Type) string {
+	switch t := typ.Underlying().(type) {
+	case *types.Basic:
+		info := t.Info()
+		switch {
+		case info&types.IsInteger != 0:
+			return "Integer"
+		case info&types.IsBoolean != 0:
+			return "Boolean"
+		case info&types.IsString != 0:
+			return "String"
+		default:
+			return "Any"
+		}
+	case *types.Map:
+		return "Map"
+	case *types.Struct:
+		return "Struct"
+	case *types.Slice:
+		if isByte(t.Elem()) {
+			return "ByteArray"
+		}
+		return "Array"
+	default:
+		return "Any"
+	}
+}
+
 // ConvertToManifest converts a contract to the manifest.Manifest struct for debugger.
 // Note: manifest is taken from the external source, however it can be generated ad-hoc. See #1038.
 func (di *DebugInfo) ConvertToManifest(o *Options) (*manifest.Manifest, error) {
@@ -599,6 +658,114 @@ func (di *DebugInfo) ConvertToManifest(o *Options) (*manifest.Manifest, error) {
 	if o.ContractSupportedStandards != nil {
 		result.SupportedStandards = o.ContractSupportedStandards
 	}
+
+	// Add struct type information to extra field if IncludeTypes is true
+	if o.IncludeTypes && len(di.NamedTypes) > 0 {
+		namedTypes := make([]map[string]interface{}, 0)
+		for name, extType := range di.NamedTypes {
+			fields := make([]map[string]interface{}, 0)
+			for _, field := range extType.Fields {
+				fieldType := field.ExtendedType.Base.String()
+				if field.ExtendedType.Value != nil {
+					if field.ExtendedType.Value.Name != "" {
+						typeName := field.ExtendedType.Value.Name
+						if strings.Contains(typeName, ".") {
+							typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+						}
+						fieldType = typeName + "[]"
+					} else {
+						fieldType = field.ExtendedType.Value.Base.String() + "[]"
+					}
+				} else if field.ExtendedType.Name != "" {
+					typeName := field.ExtendedType.Name
+					if strings.Contains(typeName, ".") {
+						typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+					}
+					fieldType = typeName
+				}
+				fields = append(fields, map[string]interface{}{
+					"name": field.Field,
+					"type": fieldType,
+				})
+			}
+			typeName := name
+			if strings.Contains(typeName, ".") {
+				typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+			}
+			namedTypes = append(namedTypes, map[string]interface{}{
+				"name":   typeName,
+				"fields": fields,
+			})
+		}
+
+		// Add methods information
+		methodsExtra := make([]map[string]interface{}, 0)
+		for _, method := range di.Methods {
+			if method.IsExported && method.IsFunction && method.Name.Namespace == di.MainPkg {
+				params := make([]map[string]interface{}, 0)
+				for _, p := range method.Parameters {
+					paramType := p.TypeSC.String()
+					if p.ExtendedType != nil {
+						if p.ExtendedType.Value != nil && p.ExtendedType.Value.Name != "" {
+							typeName := p.ExtendedType.Value.Name
+							if strings.Contains(typeName, ".") {
+								typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+							}
+							paramType = typeName + "[]"
+						} else if p.ExtendedType.Name != "" {
+							typeName := p.ExtendedType.Name
+							if strings.Contains(typeName, ".") {
+								typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+							}
+							paramType = typeName
+						}
+					}
+					params = append(params, map[string]interface{}{
+						"name": p.Name,
+						"type": paramType,
+					})
+				}
+
+				returnType := method.ReturnTypeSC.String()
+				if method.ReturnTypeExtended != nil {
+					if method.ReturnTypeExtended.Value != nil && method.ReturnTypeExtended.Value.Name != "" {
+						typeName := method.ReturnTypeExtended.Value.Name
+						if strings.Contains(typeName, ".") {
+							typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+						}
+						returnType = typeName + "[]"
+					} else if method.ReturnTypeExtended.Name != "" {
+						typeName := method.ReturnTypeExtended.Name
+						if strings.Contains(typeName, ".") {
+							typeName = typeName[strings.LastIndex(typeName, ".")+1:]
+						}
+						returnType = typeName
+					}
+				}
+
+				methodsExtra = append(methodsExtra, map[string]interface{}{
+					"name":       method.Name.Name,
+					"parameters": params,
+					"returnType": returnType,
+				})
+			}
+		}
+
+		if len(namedTypes) > 0 {
+			extraData, err := json.Marshal(map[string]interface{}{
+				"nep25": map[string]interface{}{
+					"methods":    methodsExtra,
+					"events":     []interface{}{},
+					"namedTypes": namedTypes,
+				},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal struct types: %w", err)
+			}
+			result.Extra = json.RawMessage(extraData)
+		}
+	}
+
 	events := make([]manifest.Event, len(o.ContractEvents))
 	for i, e := range o.ContractEvents {
 		params := make([]manifest.Parameter, len(e.Parameters))

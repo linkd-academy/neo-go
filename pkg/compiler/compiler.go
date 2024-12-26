@@ -54,6 +54,9 @@ type Options struct {
 	// This setting has effect only if manifest is emitted.
 	NoPermissionsCheck bool
 
+	// IncludeTypes specifies if struct type information should be included in manifest extra field.
+	IncludeTypes bool
+
 	// GuessEventTypes specifies if types of runtime notifications need to be guessed
 	// from the usage context. These types are used for RPC binding generation only and
 	// can be defined for events with name known at the compilation time and without
