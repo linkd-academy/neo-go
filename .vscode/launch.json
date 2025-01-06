@@ -13,11 +13,11 @@
                 "contract",
                 "compile",
                 "--config",
-                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.yml",
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/abstract/abstract.yml",
                 "-in",
-                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.go",
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/abstract/abstract.go",
                 "-m",
-                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/permissions-manager/permissions-manager.manifest.json"
+                "/Users/ricardoprado/Workspace/neo-javascript-sdk/contracts/abstract/abstract.manifest.json"
             ],
             "cwd": "${workspaceFolder}"
         },
