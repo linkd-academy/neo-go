@@ -390,9 +390,15 @@ func (c *codegen) scAndVMTypeFromType(t types.Type, exts map[string]binding.Exte
 		var extName string
 		if isNamed {
 			over.Package = named.Obj().Pkg().Path()
-			over.TypeName = named.Obj().Pkg().Name() + "." + named.Obj().Name()
-			_ = c.genStructExtended(t, over.TypeName, exts)
-			extName = over.TypeName
+			typeName := named.Obj().Pkg().Name() + "." + named.Obj().Name()
+			baseName := typeName
+			if isPtr {
+				over.TypeName = baseName + "?"
+			} else {
+				over.TypeName = baseName
+			}
+			_ = c.genStructExtended(t, baseName, exts)
+			extName = baseName
 		} else {
 			name := "unnamed"
 			if exts != nil {
@@ -401,12 +407,15 @@ func (c *codegen) scAndVMTypeFromType(t types.Type, exts map[string]binding.Exte
 				}
 				_ = c.genStructExtended(t, name, exts)
 			}
-			// For bindings configurator this structure becomes named in fact. Its name
-			// is "unnamed[X...X]".
+			if isPtr {
+				over.TypeName = name + "?"
+			} else {
+				over.TypeName = name
+			}
 			extName = name
 		}
 		return smartcontract.ArrayType, stackitem.StructT, over,
-			&binding.ExtendedType{ // Value-less, refer to exts.
+			&binding.ExtendedType{
 				Base: smartcontract.ArrayType,
 				Name: extName,
 			}
@@ -439,27 +448,45 @@ func (c *codegen) scAndVMTypeFromType(t types.Type, exts map[string]binding.Exte
 func (c *codegen) genStructExtended(t *types.Struct, name string, exts map[string]binding.ExtendedType) *binding.ExtendedType {
 	var et *binding.ExtendedType
 	if exts != nil {
-		if exts[name].Name != name {
+		baseName := strings.TrimSuffix(name, "?")
+		if exts[baseName].Name != baseName && exts[name].Name != name {
 			et = &binding.ExtendedType{
 				Base:   smartcontract.ArrayType,
-				Name:   name,
+				Name:   baseName,
 				Fields: make([]binding.FieldExtendedType, t.NumFields()),
 			}
-			exts[name] = *et // Prefill to solve recursive structures.
+			exts[baseName] = *et
 			for i := range et.Fields {
 				field := t.Field(i)
 				ft, _, _, fet := c.scAndVMTypeFromType(field.Type(), exts)
+
+				_, isPointer := field.Type().(*types.Pointer)
+
 				if fet == nil {
 					et.Fields[i].ExtendedType.Base = ft
+					if isPointer {
+						et.Fields[i].Field = field.Name() + "?"
+					} else {
+						et.Fields[i].Field = field.Name()
+					}
 				} else {
 					et.Fields[i].ExtendedType = *fet
+					if isPointer {
+						et.Fields[i].Field = field.Name() + "?"
+					} else {
+						et.Fields[i].Field = field.Name()
+					}
 				}
-				et.Fields[i].Field = field.Name()
 			}
-			exts[name] = *et // Set real structure data.
+			exts[baseName] = *et
 		} else {
-			et = new(binding.ExtendedType)
-			*et = exts[name]
+			if existing, ok := exts[baseName]; ok {
+				et = new(binding.ExtendedType)
+				*et = existing
+			} else {
+				et = new(binding.ExtendedType)
+				*et = exts[name]
+			}
 		}
 	}
 	return et
