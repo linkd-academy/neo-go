@@ -622,48 +622,6 @@ func parsePairJSON(data []byte, sep string) (string, string, error) {
 	return ss[0], ss[1], nil
 }
 
-// processStructType extracts information about struct fields and their types
-func processStructType(st *types.Struct) map[string]interface{} {
-	fields := make(map[string]interface{})
-	for i := 0; i < st.NumFields(); i++ {
-		field := st.Field(i)
-		fields[field.Name()] = map[string]interface{}{
-			"type": toNeoTypeString(field.Type()),
-			"name": field.Name(),
-		}
-	}
-	return fields
-}
-
-// toNeoTypeString converts Go types to Neo type strings
-func toNeoTypeString(typ types.Type) string {
-	switch t := typ.Underlying().(type) {
-	case *types.Basic:
-		info := t.Info()
-		switch {
-		case info&types.IsInteger != 0:
-			return "Integer"
-		case info&types.IsBoolean != 0:
-			return "Boolean"
-		case info&types.IsString != 0:
-			return "String"
-		default:
-			return "Any"
-		}
-	case *types.Map:
-		return "Map"
-	case *types.Struct:
-		return "Struct"
-	case *types.Slice:
-		if isByte(t.Elem()) {
-			return "ByteArray"
-		}
-		return "Array"
-	default:
-		return "Any"
-	}
-}
-
 // ConvertToManifest converts a contract to the manifest.Manifest struct for debugger.
 // Note: manifest is taken from the external source, however it can be generated ad-hoc. See #1038.
 func (di *DebugInfo) ConvertToManifest(o *Options) (*manifest.Manifest, error) {

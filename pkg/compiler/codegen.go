@@ -913,7 +913,8 @@ func (c *codegen) Visit(node ast.Node) ast.Visitor {
 	case *ast.StarExpr:
 		_, ok := c.getStruct(c.typeOf(n.X))
 		if !ok {
-			c.prog.Err = errors.New("dereferencing is only supported on structs")
+			c.prog.Err = fmt.Errorf("%s: '&' can be used only with struct literals",
+				c.buildInfo.config.Fset.Position(n.Pos()))
 			return nil
 		}
 		ast.Walk(c, n.X)
@@ -1158,7 +1159,8 @@ func (c *codegen) Visit(node ast.Node) ast.Visitor {
 				c.convertStruct(lit, true)
 				return nil
 			}
-			c.prog.Err = fmt.Errorf("'&' can be used only with struct literals")
+			c.prog.Err = fmt.Errorf("%s: '&' can be used only with struct literals",
+				c.buildInfo.config.Fset.Position(n.Pos()))
 			return nil
 		}
 
