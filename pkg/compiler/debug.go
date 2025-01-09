@@ -668,8 +668,16 @@ func (di *DebugInfo) ConvertToManifest(o *Options) (*manifest.Manifest, error) {
 					}
 					fieldType = typeName
 				}
+
+				// Check if the field is marked as a pointer
+				name := field.Field
+				if strings.HasSuffix(name, "?") {
+					name = strings.TrimSuffix(name, "?")
+					fieldType = fieldType + "?"
+				}
+
 				fields = append(fields, map[string]interface{}{
-					"name": field.Field,
+					"name": name,
 					"type": fieldType,
 				})
 			}
