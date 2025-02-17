@@ -123,6 +123,13 @@ func NewCommands() []*cli.Command {
 					Action:    resetDB,
 					Flags:     cfgHeightFlags,
 				},
+				{
+					Name:      "migrate-stateroot",
+					Usage:     "Create reverse indices for existing state roots",
+					UsageText: "neo-go db migrate-stateroot [--config-path path] [-p/-m/-t] [--config-file file]",
+					Action:    migrateStateRoot,
+					Flags:     cfgFlags,
+				},
 			},
 		},
 	}
@@ -686,4 +693,37 @@ func Logo() string {
  / /|  / /___/ /_/ /_____/ /_/ / /_/ /
 /_/ |_/_____/\____/      \____/\____/
 `
+}
+
+func migrateStateRoot(ctx *cli.Context) error {
+	if err := cmdargs.EnsureNone(ctx); err != nil {
+		return err
+	}
+	cfg, err := options.GetConfigFromContext(ctx)
+	if err != nil {
+		return cli.Exit(err, 1)
+	}
+	log, _, logCloser, err := options.HandleLoggingParams(ctx.Bool("debug"), cfg.ApplicationConfiguration)
+	if err != nil {
+		return cli.Exit(err, 1)
+	}
+	if logCloser != nil {
+		defer func() { _ = logCloser() }()
+	}
+
+	chain, prometheus, pprof, err := initBCWithMetrics(cfg, log)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		pprof.ShutDown()
+		prometheus.ShutDown()
+		chain.Close()
+	}()
+
+	err = chain.GetStateModule().MigrateStateRootIndices()
+	if err != nil {
+		return cli.Exit(fmt.Errorf("failed to migrate state root indices: %w", err), 1)
+	}
+	return nil
 }

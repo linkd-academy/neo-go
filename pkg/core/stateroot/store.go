@@ -8,6 +8,8 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/io"
+	"github.com/nspcc-dev/neo-go/pkg/util"
+	"go.uber.org/zap"
 )
 
 var (
@@ -19,11 +21,17 @@ var (
 const (
 	prefixLocal     = 0x02
 	prefixValidated = 0x03
+	prefixRootIndex = 0x04
 )
 
 func (s *Module) addLocalStateRoot(store *storage.MemCachedStore, sr *state.MPTRoot) {
 	key := makeStateRootKey(sr.Index)
 	putStateRoot(store, key, sr)
+
+	indexKey := makeRootIndexKey(sr.Root)
+	heightBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(heightBytes, sr.Index)
+	store.Put(indexKey, heightBytes)
 
 	data := make([]byte, 4)
 	binary.LittleEndian.PutUint32(data, sr.Index)
@@ -55,6 +63,13 @@ func makeStateRootKey(index uint32) []byte {
 	return key
 }
 
+func makeRootIndexKey(root util.Uint256) []byte {
+	key := make([]byte, 1+util.Uint256Size)
+	key[0] = prefixRootIndex
+	copy(key[1:], root.BytesBE())
+	return key
+}
+
 // AddStateRoot adds validated state root provided by network.
 func (s *Module) AddStateRoot(sr *state.MPTRoot) error {
 	if err := s.VerifyStateRoot(sr); err != nil {
@@ -81,4 +96,53 @@ func (s *Module) AddStateRoot(sr *state.MPTRoot) error {
 		updateStateHeightMetric(sr.Index)
 	}
 	return nil
+}
+
+func (s *Module) MigrateStateRootIndices() error {
+	var count uint32
+	s.log.Info("starting state root indices migration")
+	b := storage.NewMemCachedStore(s.Store)
+	s.Store.Seek(storage.SeekRange{
+		Prefix: []byte{byte(storage.DataMPTAux)},
+	}, func(k, v []byte) bool {
+		if len(k) != 5 || k[0] != byte(storage.DataMPTAux) {
+			return true
+		}
+		sr := &state.MPTRoot{}
+		r := io.NewBinReaderFromBuf(v)
+		sr.DecodeBinary(r)
+		if r.Err != nil {
+			s.log.Error("failed to decode state root", zap.Error(r.Err), zap.Binary("key", k))
+			return true
+		}
+		indexKey := makeRootIndexKey(sr.Root)
+		heightBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(heightBytes, sr.Index)
+		b.Put(indexKey, heightBytes)
+		count++
+		if count%1000 == 0 {
+			s.log.Info("migration progress", zap.Uint32("processed", count))
+		}
+		return true
+	})
+	if count == 0 {
+		s.log.Info("no state roots to migrate")
+		return nil
+	}
+	s.log.Info("persisting migrated indices", zap.Uint32("total", count))
+	_, err := b.Persist()
+	if err != nil {
+		return fmt.Errorf("failed to persist state root indices: %w", err)
+	}
+	s.log.Info("state root indices migration completed successfully", zap.Uint32("total_migrated", count))
+	return nil
+}
+
+func (s *Module) GetLatestStateHeight(root util.Uint256) (uint32, error) {
+	indexKey := makeRootIndexKey(root)
+	data, err := s.Store.Get(indexKey)
+	if err != nil {
+		return 0, storage.ErrKeyNotFound
+	}
+	return binary.BigEndian.Uint32(data), nil
 }
